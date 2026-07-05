@@ -237,7 +237,7 @@ export default function App() {
         {/* Logo and Seal Title */}
         <div className="flex items-center gap-3">
           <img
-            src="/src/assets/images/civiciq_logo_1783246559258.jpg"
+            src="/src/assets/images/civic-ai.png"
             alt="CivicIQ Logo"
             className="w-9 h-9 rounded-full shrink-0 object-cover border border-slate-200"
             referrerPolicy="no-referrer"

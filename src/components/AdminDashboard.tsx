@@ -45,47 +45,108 @@ export default function AdminDashboard({
   onAssignWorker,
   onUpdateStatus,
 }: AdminDashboardProps) {
-  const [adminTab, setAdminTab] = useState<"overview" | "reports" | "workers" | "simulator">("overview");
-  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(complaints[0]?.id || null);
+
+  // Safe fallbacks
+  const complaintList = Array.isArray(complaints) ? complaints : [];
+  const workerList = Array.isArray(workers) ? workers : [];
+
+  const [adminTab, setAdminTab] = useState<
+    "overview" | "reports" | "workers" | "simulator"
+  >("overview");
+
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(
+    complaintList[0]?.id ?? null
+  );
+
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [severityFilter, setSeverityFilter] = useState("All");
+
   const [budgetMultiplier, setBudgetMultiplier] = useState(1.0);
+
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [showClusters, setShowClusters] = useState(true);
   const [showWorkers, setShowWorkers] = useState(true);
   const [showTraffic, setShowTraffic] = useState(true);
   const [showPriorityZones, setShowPriorityZones] = useState(true);
-  const [assigningIncidentId, setAssigningIncidentId] = useState<string | null>(null);
+
+  const [assigningIncidentId, setAssigningIncidentId] =
+    useState<string | null>(null);
+
   const [downloadingPDF, setDownloadingPDF] = useState(false);
+
   const [showCopilot, setShowCopilot] = useState(false);
 
-  const selectedIncident = complaints.find((c) => c.id === selectedIncidentId);
+  const selectedIncident =
+    complaintList.find((c) => c.id === selectedIncidentId) ?? null;
 
-  const filteredComplaints = complaints.filter((c) => {
+  const filteredComplaints = complaintList.filter((c) => {
     const matchesSearch =
       c.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.address.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = categoryFilter === "All" || c.category === categoryFilter;
-    const matchesSeverity = severityFilter === "All" || c.aiAnalysis.severity === severityFilter;
+
+    const matchesCategory =
+      categoryFilter === "All" || c.category === categoryFilter;
+
+    const matchesSeverity =
+      severityFilter === "All" || c.aiAnalysis.severity === severityFilter;
+
     return matchesSearch && matchesCategory && matchesSeverity;
   });
 
-  const totalReports = complaints.length;
-  const resolvedCount = complaints.filter((c) => c.status === "Resolved").length;
-  const pendingCount = complaints.filter((c) => c.status === "Pending").length;
-  const inProgressCount = complaints.filter((c) => c.status === "In Progress" || c.status === "Assigned").length;
+  const totalReports = complaintList.length;
+
+  const resolvedCount = complaintList.filter(
+    (c) => c.status === "Resolved"
+  ).length;
+
+  const pendingCount = complaintList.filter(
+    (c) => c.status === "Pending"
+  ).length;
+
+  const inProgressCount = complaintList.filter(
+    (c) => c.status === "In Progress" || c.status === "Assigned"
+  ).length;
 
   const totalAllocatedBudget = 450000;
-  const spentBudget = complaints.reduce((sum, c) => sum + (c.status === "Resolved" ? c.aiAnalysis.budgetRequired : 0), 0) + 124000;
-  const activeBudgetRequired = complaints.reduce((sum, c) => sum + (c.status !== "Resolved" ? c.aiAnalysis.budgetRequired : 0), 0);
-  const budgetPct = Math.min(100, Math.round((spentBudget / totalAllocatedBudget) * 100));
 
-  const simulatedSpeedupPercentage = Math.round((budgetMultiplier - 1.0) * 140);
-  const simulatedWaitTimeCompression = Math.round((1 - (1 / budgetMultiplier)) * 100);
-  const simulatedTechnicianEfficiency = Math.round((budgetMultiplier - 1.0) * 45 + 100);
+  const spentBudget =
+    complaintList.reduce(
+      (sum, c) =>
+        sum +
+        (c.status === "Resolved"
+          ? c.aiAnalysis.budgetRequired
+          : 0),
+      0
+    ) + 124000;
 
+  const activeBudgetRequired =
+    complaintList.reduce(
+      (sum, c) =>
+        sum +
+        (c.status !== "Resolved"
+          ? c.aiAnalysis.budgetRequired
+          : 0),
+      0
+    );
+
+  const budgetPct = Math.min(
+    100,
+    Math.round((spentBudget / totalAllocatedBudget) * 100)
+  );
+
+  const simulatedSpeedupPercentage = Math.round(
+    (budgetMultiplier - 1) * 140
+  );
+
+  const simulatedWaitTimeCompression = Math.round(
+    (1 - 1 / budgetMultiplier) * 100
+  );
+
+  const simulatedTechnicianEfficiency = Math.round(
+    (budgetMultiplier - 1) * 45 + 100
+  );
   const handleDownloadPDF = () => {
     setDownloadingPDF(true);
     setTimeout(() => {
@@ -110,7 +171,7 @@ export default function AdminDashboard({
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 px-6 pt-5 pb-4 border-b border-slate-800/80">
           <div className="flex items-center gap-3">
             <img
-              src="/src/assets/images/civiciq_logo_1783246559258.jpg"
+              src="/src/assets/images/civic-ai.png"
               alt="CivicIQ Logo"
               className="w-10 h-10 rounded-lg shrink-0 object-cover border border-slate-700"
               referrerPolicy="no-referrer"
