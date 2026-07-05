@@ -20,10 +20,12 @@ import {
   Volume2,
   Lock,
   UploadCloud,
-  ChevronDown
+  ChevronDown,
+  MessageCircle
 } from "lucide-react";
 import { Complaint, AIAnalysis } from "../types";
 import SmartCityMap from "./SmartCityMap";
+import CitizenAIChat from "./CitizenAIChat";
 
 // Predefined photo templates for quick click-to-upload simulation
 const SAMPLE_PHOTOS = [
@@ -77,9 +79,9 @@ export default function CitizenApp({
   onViewComplaintDetails,
 }: CitizenAppProps) {
   // Mobile app screens navigation
-  // "splash" | "login" | "signup" | "home" | "submit" | "confirm" | "history" | "profile" | "settings"
+  // "splash" | "login" | "signup" | "home" | "submit" | "aichat" | "confirm" | "history" | "profile" | "settings"
   const [screen, setScreen] = useState<
-    "splash" | "login" | "signup" | "home" | "submit" | "confirm" | "history" | "profile" | "settings"
+    "splash" | "login" | "signup" | "home" | "submit" | "aichat" | "confirm" | "history" | "profile" | "settings"
   >("splash");
 
   // User auth state
@@ -464,13 +466,22 @@ export default function CitizenApp({
                     <h3 className="font-display font-semibold text-lg">Report Infrastructure Hazard</h3>
                     <p className="text-xs text-blue-100 mt-1">Submit visual or audio proof. CivicIQ AI will instantly parse, prioritize, and trigger technician dispatch.</p>
                   </div>
-                  <button
-                    onClick={() => setScreen("submit")}
-                    className="w-full py-3 bg-white hover:bg-slate-50 text-gov-blue font-bold text-xs rounded-xl shadow transition-colors flex items-center justify-center gap-2"
-                  >
-                    <UploadCloud className="h-4.5 w-4.5" />
-                    <span>Initiate AI Dispatch Intake</span>
-                  </button>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <button
+                      onClick={() => setScreen("submit")}
+                      className="w-full py-3 bg-white hover:bg-slate-50 text-gov-blue font-bold text-xs rounded-xl shadow transition-colors flex items-center justify-center gap-2"
+                    >
+                      <UploadCloud className="h-4.5 w-4.5" />
+                      <span>Form Intake</span>
+                    </button>
+                    <button
+                      onClick={() => setScreen("aichat")}
+                      className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow transition-colors flex items-center justify-center gap-2"
+                    >
+                      <MessageCircle className="h-4.5 w-4.5" />
+                      <span>Chat Intake</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Submissions Section */}
@@ -562,6 +573,20 @@ export default function CitizenApp({
                 </button>
               </div>
             </div>
+          )}
+
+          {/* SCREEN: AI CHAT INTAKE */}
+          {screen === "aichat" && (
+            <CitizenAIChat
+              complaints={complaints}
+              reporterName={user?.name}
+              onSubmitComplaint={(c) => {
+                onSubmitComplaint(c);
+                setLastSubmittedId(c.id);
+                setScreen("confirm");
+              }}
+              onClose={() => setScreen("home")}
+            />
           )}
 
           {/* SCREEN: SUBMIT COMPLAINT FORM */}

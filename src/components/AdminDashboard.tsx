@@ -25,10 +25,12 @@ import {
   Info,
   Layers2,
   Navigation,
-  X
+  X,
+  Bot
 } from "lucide-react";
 import { Complaint, FieldWorker, SmartCityBudget } from "../types";
 import SmartCityMap from "./SmartCityMap";
+import CopilotChat from "./CopilotChat";
 
 interface AdminDashboardProps {
   complaints: Complaint[];
@@ -43,37 +45,23 @@ export default function AdminDashboard({
   onAssignWorker,
   onUpdateStatus,
 }: AdminDashboardProps) {
-  // Navigation tabs for Admin Workspace
-  // "overview" | "reports" | "workers" | "simulator"
   const [adminTab, setAdminTab] = useState<"overview" | "reports" | "workers" | "simulator">("overview");
-
-  // Selected complaint in the list for detail view & explainability drawer
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(complaints[0]?.id || null);
-
-  // Filter criteria states
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [severityFilter, setSeverityFilter] = useState("All");
-
-  // Budget Simulation Multiplier State
-  const [budgetMultiplier, setBudgetMultiplier] = useState(1.0); // 1.0x to 2.5x
-
-  // Map layer toggle states
+  const [budgetMultiplier, setBudgetMultiplier] = useState(1.0);
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [showClusters, setShowClusters] = useState(true);
   const [showWorkers, setShowWorkers] = useState(true);
   const [showTraffic, setShowTraffic] = useState(true);
   const [showPriorityZones, setShowPriorityZones] = useState(true);
-
-  // Assignment Modal/State helper
   const [assigningIncidentId, setAssigningIncidentId] = useState<string | null>(null);
-
-  // PDF Download simulation state
   const [downloadingPDF, setDownloadingPDF] = useState(false);
+  const [showCopilot, setShowCopilot] = useState(false);
 
   const selectedIncident = complaints.find((c) => c.id === selectedIncidentId);
 
-  // Filtered complaints list (ignoring duplicates in the main ranking table for cleaner presentation, although they can be shown)
   const filteredComplaints = complaints.filter((c) => {
     const matchesSearch =
       c.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -84,7 +72,6 @@ export default function AdminDashboard({
     return matchesSearch && matchesCategory && matchesSeverity;
   });
 
-  // KPI Calculations
   const totalReports = complaints.length;
   const resolvedCount = complaints.filter((c) => c.status === "Resolved").length;
   const pendingCount = complaints.filter((c) => c.status === "Pending").length;
@@ -93,8 +80,8 @@ export default function AdminDashboard({
   const totalAllocatedBudget = 450000;
   const spentBudget = complaints.reduce((sum, c) => sum + (c.status === "Resolved" ? c.aiAnalysis.budgetRequired : 0), 0) + 124000;
   const activeBudgetRequired = complaints.reduce((sum, c) => sum + (c.status !== "Resolved" ? c.aiAnalysis.budgetRequired : 0), 0);
+  const budgetPct = Math.min(100, Math.round((spentBudget / totalAllocatedBudget) * 100));
 
-  // Simulation Calculations based on multiplier slider
   const simulatedSpeedupPercentage = Math.round((budgetMultiplier - 1.0) * 140);
   const simulatedWaitTimeCompression = Math.round((1 - (1 / budgetMultiplier)) * 100);
   const simulatedTechnicianEfficiency = Math.round((budgetMultiplier - 1.0) * 45 + 100);
@@ -107,112 +94,134 @@ export default function AdminDashboard({
     }, 1500);
   };
 
+  const severityBarColor = (sev: string) => {
+    if (sev === "Critical") return "bg-red-500";
+    if (sev === "High") return "bg-orange-400";
+    if (sev === "Medium") return "bg-amber-400";
+    return "bg-slate-300";
+  };
+
   return (
     <div className="space-y-6">
-      
-      {/* Upper Navigation & Tabs */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-slate-200 pb-4">
-        <div className="flex items-center gap-3">
-          <img
-            src="/src/assets/images/civiciq_logo_1783246559258.jpg"
-            alt="CivicIQ Logo"
-            className="w-10 h-10 rounded-lg shrink-0 object-cover border border-slate-200 shadow-xs"
-            referrerPolicy="no-referrer"
-          />
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-display font-bold text-slate-900 leading-none">Command Center Workspace</h1>
-              <span className="text-[9px] uppercase font-mono font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block animate-pulse"></span>
-                <span>Active Link</span>
-              </span>
+
+      {/* ================= OPS CONSOLE HEADER STRIP ================= */}
+      <div className="bg-slate-900 rounded-2xl overflow-hidden shadow-lg border border-slate-800">
+        {/* Title + tabs row */}
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 px-6 pt-5 pb-4 border-b border-slate-800/80">
+          <div className="flex items-center gap-3">
+            <img
+              src="/src/assets/images/civiciq_logo_1783246559258.jpg"
+              alt="CivicIQ Logo"
+              className="w-10 h-10 rounded-lg shrink-0 object-cover border border-slate-700"
+              referrerPolicy="no-referrer"
+            />
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-xl font-display font-bold text-white leading-none tracking-tight">Command Center Workspace</h1>
+                <span className="text-[9px] uppercase font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full inline-block animate-pulse"></span>
+                  <span>Active Link</span>
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-1 max-w-md">
+                Secure administrative dashboard for multi-agent prioritization and smart-city dispatch routing.
+              </p>
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Secure administrative dashboard for multi-agent prioritization and smart-city dispatch routing.
-            </p>
+          </div>
+
+          <div className="flex items-center gap-2.5 self-start xl:self-center">
+            {/* Copilot trigger */}
+            <button
+              onClick={() => setShowCopilot(true)}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold font-mono shadow-md transition-all"
+            >
+              <Bot className="h-4 w-4" />
+              <span>Ops Copilot</span>
+            </button>
+
+            {/* Tab selector */}
+            <div className="flex items-center gap-1 bg-slate-800/80 p-1 rounded-lg border border-slate-700 font-mono text-xs">
+              {([
+                ["overview", "1. Live Ops"],
+                ["reports", "2. Reports"],
+                ["workers", `3. Crew (${workers.length})`],
+                ["simulator", "4. Simulator"],
+              ] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setAdminTab(key)}
+                  className={`px-3.5 py-2 rounded-md font-semibold transition-colors ${
+                    adminTab === key ? "bg-white text-slate-900 shadow-sm" : "text-slate-300 hover:text-white"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Tab Selector */}
-        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg border border-slate-200 self-start xl:self-center font-mono text-xs">
-          <button
-            onClick={() => setAdminTab("overview")}
-            className={`px-4 py-2 rounded-md font-semibold transition-colors ${
-              adminTab === "overview" ? "bg-white text-gov-blue shadow-sm" : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            1. Core Live Ops
-          </button>
-          <button
-            onClick={() => setAdminTab("reports")}
-            className={`px-4 py-2 rounded-md font-semibold transition-colors ${
-              adminTab === "reports" ? "bg-white text-gov-blue shadow-sm" : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            2. Analytics Reports
-          </button>
-          <button
-            onClick={() => setAdminTab("workers")}
-            className={`px-4 py-2 rounded-md font-semibold transition-colors ${
-              adminTab === "workers" ? "bg-white text-gov-blue shadow-sm" : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            3. Field Crew ({workers.length})
-          </button>
-          <button
-            onClick={() => setAdminTab("simulator")}
-            className={`px-4 py-2 rounded-md font-semibold transition-colors ${
-              adminTab === "simulator" ? "bg-white text-gov-blue shadow-sm" : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            4. "What-If" Simulator
-          </button>
+        {/* KPI strip embedded in the same console panel */}
+        <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-slate-800/80">
+          <div className="p-5">
+            <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wider font-mono">Total Complaints</div>
+            <div className="text-3xl font-bold mt-1 text-white font-mono">{totalReports}</div>
+            <div className="text-slate-500 text-[10px] font-mono mt-1.5 flex items-center gap-1">
+              <FileText className="h-3 w-3" />
+              All citizen portals linked
+            </div>
+          </div>
+
+          <div className="p-5">
+            <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wider font-mono">Active Pending</div>
+            <div className="text-3xl font-bold mt-1 text-white font-mono">{pendingCount}</div>
+            <div className="text-red-400 text-[10px] font-mono mt-1.5 flex items-center gap-1">
+              <AlertTriangle className="h-3 w-3" />
+              Requires triage
+            </div>
+          </div>
+
+          <div className="p-5">
+            <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wider font-mono">Resolved Total</div>
+            <div className="text-3xl font-bold mt-1 text-white font-mono">{resolvedCount}</div>
+            <div className="text-emerald-400 text-[10px] font-mono mt-1.5 flex items-center gap-1">
+              <CheckCircle className="h-3 w-3" />
+              {Math.round((resolvedCount / totalReports) * 100)}% clearance rate
+            </div>
+          </div>
+
+          <div className="p-5">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500 text-[10px] font-bold uppercase tracking-wider font-mono">Allocated Budget</span>
+              <span className="text-[9px] font-mono text-slate-500">{budgetPct}%</span>
+            </div>
+            <div className="text-3xl font-bold mt-1 text-white font-mono">${spentBudget.toLocaleString()}</div>
+            <div className="mt-2 h-1 w-full bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-full bg-blue-500 rounded-full" style={{ width: `${budgetPct}%` }}></div>
+            </div>
+            <div className="text-slate-500 text-[9px] font-mono mt-1.5">
+              of ${totalAllocatedBudget.toLocaleString()} max limit
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* ================= COPILOT SLIDE-OVER ================= */}
+      {showCopilot && (
+        <CopilotChat
+          complaints={complaints}
+          workers={workers}
+          onClose={() => setShowCopilot(false)}
+          onSelectComplaint={(id) => {
+            setSelectedIncidentId(id);
+            setAdminTab("overview");
+          }}
+        />
+      )}
 
       {/* ADMIN SCREEN: CORE LIVE OPERATIONS OVERVIEW */}
       {adminTab === "overview" && (
         <div className="space-y-6 animate-fade-in">
-          
-          {/* KPI Dashboard Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-              <div className="text-slate-500 text-xs font-bold uppercase tracking-wider font-mono">Total Complaints</div>
-              <div className="text-3xl font-bold mt-1 text-slate-900 font-mono">{totalReports}</div>
-              <div className="text-slate-500 text-[10px] font-bold font-mono mt-2 flex items-center gap-1">
-                <FileText className="h-3 w-3 text-gov-blue" />
-                All citizen portals linked
-              </div>
-            </div>
-
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-              <div className="text-slate-500 text-xs font-bold uppercase tracking-wider font-mono">Active Pending</div>
-              <div className="text-3xl font-bold mt-1 text-slate-900 font-mono">{pendingCount}</div>
-              <div className="text-red-600 text-[10px] font-bold font-mono mt-2 flex items-center gap-1">
-                <AlertTriangle className="h-3 w-3 animate-pulse" />
-                Requires triage
-              </div>
-            </div>
-
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-              <div className="text-slate-500 text-xs font-bold uppercase tracking-wider font-mono">Resolved Total</div>
-              <div className="text-3xl font-bold mt-1 text-slate-900 font-mono">{resolvedCount}</div>
-              <div className="text-emerald-600 text-[10px] font-bold font-mono mt-2 flex items-center gap-1">
-                <CheckCircle className="h-3 w-3" />
-                {Math.round((resolvedCount / totalReports) * 100)}% clearance rate
-              </div>
-            </div>
-
-            {/* Solid primary color card as in Geometric Balance theme */}
-            <div className="bg-gov-blue p-5 rounded-xl shadow-md text-white border border-gov-blue">
-              <div className="opacity-80 text-xs font-bold uppercase tracking-wider font-mono font-semibold">Allocated Budget</div>
-              <div className="text-3xl font-bold mt-1 font-mono">${spentBudget.toLocaleString()}</div>
-              <div className="text-white/90 text-[10px] font-bold font-mono mt-2 flex items-center gap-1 uppercase tracking-wide">
-                <DollarSign className="h-3 w-3" />
-                Max limit: ${totalAllocatedBudget.toLocaleString()}
-              </div>
-            </div>
-          </div>
 
           {/* Interactive GIS Command Map Section with toggles */}
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden p-4 space-y-4">
@@ -225,47 +234,25 @@ export default function AdminDashboard({
                 </div>
               </div>
 
-              {/* Layer Controls Dashboard */}
-              <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] text-slate-600 font-semibold">
-                <button
-                  onClick={() => setShowHeatmap(!showHeatmap)}
-                  className={`px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-all ${
-                    showHeatmap ? "bg-red-50 text-red-600 border-red-200" : "bg-white border-slate-200 hover:bg-slate-50"
-                  }`}
-                >
-                  <Flame className="h-3.5 w-3.5" />
-                  <span>Heatmap {showHeatmap ? "ON" : "OFF"}</span>
-                </button>
-
-                <button
-                  onClick={() => setShowClusters(!showClusters)}
-                  className={`px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-all ${
-                    showClusters ? "bg-indigo-50 text-indigo-600 border-indigo-200" : "bg-white border-slate-200 hover:bg-slate-50"
-                  }`}
-                >
-                  <Layers2 className="h-3.5 w-3.5" />
-                  <span>Clustering {showClusters ? "ON" : "OFF"}</span>
-                </button>
-
-                <button
-                  onClick={() => setShowWorkers(!showWorkers)}
-                  className={`px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-all ${
-                    showWorkers ? "bg-blue-50 text-gov-blue border-blue-200" : "bg-white border-slate-200 hover:bg-slate-50"
-                  }`}
-                >
-                  <Users className="h-3.5 w-3.5" />
-                  <span>Live Technicians {showWorkers ? "ON" : "OFF"}</span>
-                </button>
-
-                <button
-                  onClick={() => setShowTraffic(!showTraffic)}
-                  className={`px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-all ${
-                    showTraffic ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-white border-slate-200 hover:bg-slate-50"
-                  }`}
-                >
-                  <Navigation className="h-3.5 w-3.5" />
-                  <span>Traffic Overlay {showTraffic ? "ON" : "OFF"}</span>
-                </button>
+              {/* Layer Controls — segmented pill group */}
+              <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 rounded-lg border border-slate-200 font-mono text-[10px] font-semibold">
+                {[
+                  { key: "heatmap", label: "Heatmap", icon: Flame, on: showHeatmap, set: setShowHeatmap, activeClass: "bg-red-500 text-white" },
+                  { key: "clusters", label: "Clustering", icon: Layers2, on: showClusters, set: setShowClusters, activeClass: "bg-indigo-500 text-white" },
+                  { key: "workers", label: "Technicians", icon: Users, on: showWorkers, set: setShowWorkers, activeClass: "bg-gov-blue text-white" },
+                  { key: "traffic", label: "Traffic", icon: Navigation, on: showTraffic, set: setShowTraffic, activeClass: "bg-amber-500 text-white" },
+                ].map(({ key, label, icon: Icon, on, set, activeClass }) => (
+                  <button
+                    key={key}
+                    onClick={() => set(!on)}
+                    className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-all ${
+                      on ? activeClass + " shadow-sm" : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    <span>{label}</span>
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -285,7 +272,7 @@ export default function AdminDashboard({
 
           {/* Table & Detailed Explainability Drawer split layout */}
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-            
+
             {/* Table side (7 columns on XL) */}
             <div className="xl:col-span-7 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
               <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/70">
@@ -315,11 +302,11 @@ export default function AdminDashboard({
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 font-mono text-slate-600">
+                      <th className="p-3 font-semibold"></th>
                       <th className="p-3 font-semibold">Incident ID</th>
                       <th className="p-3 font-semibold">Primary Title</th>
                       <th className="p-3 font-semibold text-center">Priority</th>
                       <th className="p-3 font-semibold">Status</th>
-                      <th className="p-3 font-semibold">Severity</th>
                       <th className="p-3 font-semibold text-right">Actions</th>
                     </tr>
                   </thead>
@@ -330,10 +317,6 @@ export default function AdminDashboard({
                       if (c.status === "Resolved") badge = "bg-emerald-50 text-emerald-700 border-emerald-200";
                       else if (c.status === "In Progress") badge = "bg-blue-50 text-blue-700 border-blue-200";
 
-                      let severityBadge = "bg-slate-100 text-slate-700";
-                      if (c.aiAnalysis.severity === "Critical") severityBadge = "bg-red-100 text-red-700 font-bold";
-                      else if (c.aiAnalysis.severity === "High") severityBadge = "bg-orange-100 text-orange-700";
-
                       return (
                         <tr
                           key={c.id}
@@ -342,6 +325,9 @@ export default function AdminDashboard({
                             isSelected ? "bg-gov-blue-light/40 font-semibold" : ""
                           }`}
                         >
+                          <td className="pl-3">
+                            <span className={`block w-1.5 h-6 rounded-full ${severityBarColor(c.aiAnalysis.severity)}`} title={c.aiAnalysis.severity}></span>
+                          </td>
                           <td className="p-3 font-bold text-slate-900">{c.id}</td>
                           <td className="p-3 font-sans font-medium text-slate-800 truncate max-w-[150px]">
                             {c.title}
@@ -354,11 +340,6 @@ export default function AdminDashboard({
                           <td className="p-3">
                             <span className={`text-[9px] px-2 py-0.5 border rounded-full uppercase font-bold ${badge}`}>
                               {c.status}
-                            </span>
-                          </td>
-                          <td className="p-3">
-                            <span className={`text-[9px] px-2 py-0.5 rounded uppercase font-bold ${severityBadge}`}>
-                              {c.aiAnalysis.severity}
                             </span>
                           </td>
                           <td className="p-3 text-right">
@@ -384,7 +365,6 @@ export default function AdminDashboard({
             <div className="xl:col-span-5 bg-white border border-slate-200 border-l-4 border-l-gov-blue rounded-xl shadow-sm p-5 space-y-4">
               {selectedIncident ? (
                 <>
-                  {/* Header Title */}
                   <div className="border-b border-slate-100 pb-3 flex items-start justify-between">
                     <div>
                       <span className="text-[10px] font-mono text-slate-400 block uppercase">
@@ -393,26 +373,21 @@ export default function AdminDashboard({
                       <h4 className="font-display font-semibold text-slate-800 text-sm mt-0.5">
                         Explainable AI Diagnostics
                       </h4>
-                      <div className="inline-block mt-1 bg-gov-blue/10 text-gov-blue px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider italic">
-                        Explainable Engine
-                      </div>
                     </div>
                     <span className="text-xs font-mono font-bold text-gov-blue bg-gov-blue-light px-2.5 py-1 rounded">
                       Score: {selectedIncident.aiAnalysis.priorityScore}/100
                     </span>
                   </div>
 
-                  {/* Mathematical priority formula */}
-                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-[10px] font-mono text-slate-500 leading-relaxed">
-                    <span className="font-bold text-slate-700 block uppercase text-[9px] mb-1">
+                  <div className="bg-slate-900 rounded-lg p-3 text-[10px] font-mono text-slate-400 leading-relaxed">
+                    <span className="font-bold text-slate-300 block uppercase text-[9px] mb-1">
                       Priority Weights Algorithm Formula:
                     </span>
-                    <code>
-                      Priority = (Severity Weight × 0.40) + (Population Affected Weight × 0.25) + (Delay Impact × 0.20) + (Weather/Risk × 0.15)
+                    <code className="text-emerald-400">
+                      Priority = (Severity × 0.40) + (Population × 0.25) + (Delay × 0.20) + (Risk × 0.15)
                     </code>
                   </div>
 
-                  {/* Explanations Grid */}
                   <div className="space-y-3 text-xs">
                     <div className="grid grid-cols-2 gap-3 font-mono text-[10px]">
                       <div className="border border-slate-100 p-2.5 rounded-lg bg-white">
@@ -441,14 +416,13 @@ export default function AdminDashboard({
 
                     <div className="border border-slate-100 border-l-4 border-l-gov-blue p-3.5 rounded-lg bg-slate-50/50 space-y-1">
                       <span className="text-[10px] uppercase font-mono font-bold text-gov-blue block">
-                        Agent Logic & Reasoning Explanation:
+                        Agent Logic & Reasoning:
                       </span>
                       <p className="text-xs text-slate-700 font-sans italic leading-relaxed">
                         "{selectedIncident.aiAnalysis.reasoning}"
                       </p>
                     </div>
 
-                    {/* Timeline History Tracker */}
                     <div className="space-y-2 border-t border-slate-100 pt-3">
                       <span className="text-[10px] uppercase font-mono font-bold text-slate-400 block">
                         Lifecycle Event Audit Trail
@@ -467,7 +441,6 @@ export default function AdminDashboard({
                       </div>
                     </div>
 
-                    {/* Live Assignment Dispatch */}
                     <div className="border-t border-slate-100 pt-3 flex gap-2">
                       <button
                         onClick={() => setAssigningIncidentId(selectedIncident.id)}
@@ -516,102 +489,46 @@ export default function AdminDashboard({
               </button>
             </div>
 
-            {/* Custom high-fidelity CSS charts representation */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-              
-              {/* Performance by Department */}
               <div className="border border-slate-200 rounded-xl p-4 space-y-4 bg-slate-50/50">
                 <h4 className="text-xs font-mono font-bold uppercase text-slate-500">Department SLA Performance</h4>
                 <div className="space-y-3 font-mono text-[11px] text-slate-600">
-                  <div className="space-y-1">
-                    <div className="flex justify-between">
-                      <span>Transportation (Road/Pothole)</span>
-                      <span className="font-bold">94% (Within 6h Target)</span>
+                  {[
+                    ["Transportation (Road/Pothole)", 94, "bg-gov-blue"],
+                    ["Water Resources (Leakage/Flood)", 89, "bg-blue-500"],
+                    ["Public Works (Streetlights)", 78, "bg-amber-500"],
+                    ["Sanitation Services (Hazmat/Trash)", 96, "bg-emerald-500"],
+                  ].map(([label, pct, color]) => (
+                    <div className="space-y-1" key={label as string}>
+                      <div className="flex justify-between">
+                        <span>{label}</span>
+                        <span className="font-bold">{pct}%</span>
+                      </div>
+                      <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                        <div className={`${color} h-full rounded-full`} style={{ width: `${pct}%` }}></div>
+                      </div>
                     </div>
-                    <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
-                      <div className="bg-gov-blue h-full rounded-full" style={{ width: "94%" }}></div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="flex justify-between">
-                      <span>Water Resources (Leakage/Flood)</span>
-                      <span className="font-bold">89% (Within 8h Target)</span>
-                    </div>
-                    <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
-                      <div className="bg-blue-500 h-full rounded-full" style={{ width: "89%" }}></div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="flex justify-between">
-                      <span>Public Works (Streetlights)</span>
-                      <span className="font-bold">78% (Within 12h Target)</span>
-                    </div>
-                    <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
-                      <div className="bg-amber-500 h-full rounded-full" style={{ width: "78%" }}></div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="flex justify-between">
-                      <span>Sanitation Services (Hazmat/Trash)</span>
-                      <span className="font-bold">96% (Within 3h Target)</span>
-                    </div>
-                    <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
-                      <div className="bg-emerald-500 h-full rounded-full" style={{ width: "96%" }}></div>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </div>
 
-              {/* Resolution volume over time (Weekly) */}
               <div className="border border-slate-200 rounded-xl p-4 space-y-4 bg-slate-50/50">
                 <h4 className="text-xs font-mono font-bold uppercase text-slate-500">Weekly Incident Intake & Resolution</h4>
-                
-                {/* Styled Vector Line Chart representation */}
                 <div className="h-36 relative flex items-end justify-between font-mono text-[9px] text-slate-400">
-                  <div className="absolute inset-0 flex flex-col justify-between pointer-events-none border-b border-slate-200">
-                    <div className="border-b border-slate-100 h-0 w-full"></div>
-                    <div className="border-b border-slate-100 h-0 w-full"></div>
-                    <div className="border-b border-slate-100 h-0 w-full"></div>
-                  </div>
-
-                  {/* Draw simple visual bars / heights */}
-                  <div className="flex-1 flex flex-col items-center gap-1">
-                    <div className="w-8 bg-blue-100 rounded-t h-16 relative">
-                      <div className="w-8 bg-gov-blue rounded-t h-12 absolute bottom-0"></div>
+                  {[
+                    ["Mon", 16, 12],
+                    ["Tue", 20, 14],
+                    ["Wed", 28, 22],
+                    ["Thu", 32, 26],
+                    ["Fri", 24, 20],
+                  ].map(([day, intake, resolved]) => (
+                    <div className="flex-1 flex flex-col items-center gap-1" key={day as string}>
+                      <div className="w-8 bg-blue-100 rounded-t relative" style={{ height: `${intake}px` }}>
+                        <div className="w-8 bg-gov-blue rounded-t absolute bottom-0" style={{ height: `${resolved}px` }}></div>
+                      </div>
+                      <span>{day}</span>
                     </div>
-                    <span>Mon</span>
-                  </div>
-
-                  <div className="flex-1 flex flex-col items-center gap-1">
-                    <div className="w-8 bg-blue-100 rounded-t h-20 relative">
-                      <div className="w-8 bg-gov-blue rounded-t h-14 absolute bottom-0"></div>
-                    </div>
-                    <span>Tue</span>
-                  </div>
-
-                  <div className="flex-1 flex flex-col items-center gap-1">
-                    <div className="w-8 bg-blue-100 rounded-t h-28 relative">
-                      <div className="w-8 bg-gov-blue rounded-t h-22 absolute bottom-0"></div>
-                    </div>
-                    <span>Wed</span>
-                  </div>
-
-                  <div className="flex-1 flex flex-col items-center gap-1">
-                    <div className="w-8 bg-blue-100 rounded-t h-32 relative">
-                      <div className="w-8 bg-gov-blue rounded-t h-26 absolute bottom-0"></div>
-                    </div>
-                    <span>Thu</span>
-                  </div>
-
-                  <div className="flex-1 flex flex-col items-center gap-1">
-                    <div className="w-8 bg-blue-100 rounded-t h-24 relative">
-                      <div className="w-8 bg-gov-blue rounded-t h-20 absolute bottom-0"></div>
-                    </div>
-                    <span>Fri</span>
-                  </div>
+                  ))}
                 </div>
                 <div className="flex items-center gap-3 justify-center text-[10px] font-mono text-slate-500 pt-2 border-t border-slate-100">
                   <div className="flex items-center gap-1.5">
@@ -624,7 +541,6 @@ export default function AdminDashboard({
                   </div>
                 </div>
               </div>
-
             </div>
           </div>
         </div>
@@ -710,8 +626,6 @@ export default function AdminDashboard({
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-              
-              {/* Slider side (5 cols) */}
               <div className="lg:col-span-5 border border-slate-200 rounded-xl p-5 space-y-4 bg-slate-50/50">
                 <div className="flex justify-between font-mono text-xs text-slate-600">
                   <span className="font-bold text-slate-800">EXPAND BUDGET MULTIPLIER:</span>
@@ -720,7 +634,6 @@ export default function AdminDashboard({
                   </span>
                 </div>
 
-                {/* Slider input */}
                 <input
                   type="range"
                   min="1.0"
@@ -743,9 +656,7 @@ export default function AdminDashboard({
                 </div>
               </div>
 
-              {/* Numerical predictive metrics outputs (7 cols) */}
               <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                
                 <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-sm space-y-1">
                   <span className="text-[10px] text-slate-400 block font-mono uppercase">Resolution Speedup</span>
                   <h4 className="text-3xl font-mono font-bold text-emerald-600">+{simulatedSpeedupPercentage}%</h4>
@@ -763,15 +674,13 @@ export default function AdminDashboard({
                   <h4 className="text-3xl font-mono font-bold text-indigo-600">{simulatedTechnicianEfficiency}%</h4>
                   <p className="text-[10px] text-slate-500 font-medium">Adaptive route loading index</p>
                 </div>
-
               </div>
-
             </div>
           </div>
         </div>
       )}
 
-      {/* DISPATCH/ASSIGN WORKER MODAL (Absolute Overlay backdrop) */}
+      {/* DISPATCH/ASSIGN WORKER MODAL */}
       {assigningIncidentId && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-slate-200 rounded-xl shadow-2xl p-6 w-full max-w-md space-y-5 animate-scale-up">
@@ -794,7 +703,6 @@ export default function AdminDashboard({
               </p>
             </div>
 
-            {/* Crew options list */}
             <div className="space-y-2 max-h-56 overflow-y-auto">
               {workers.map((w) => (
                 <button
