@@ -4,27 +4,18 @@
  *
  * Ops Copilot — natural language layer over the admin console.
  *
- * WIRING NOTE (read before shipping):
- * This component posts to POST /api/copilot on your backend. That endpoint should
- * call the Anthropic Messages API server-side (never from the browser — keep the
- * API key off the client) with tool definitions matching the `runLocalAction`
- * cases below (assign_worker, filter_queue, lookup_incident, summarize_load).
- * Claude returns a tool_use block, your backend executes nothing itself (this app
- * owns the data), and just relays the tool name + input back to the client, which
- * calls runLocalAction() against the in-memory state already in AdminDashboard.
- * That keeps a single source of truth (React state) instead of duplicating it
- * server-side.
+ * WIRING NOTE:
+ * This component now talks directly to your local Express + Groq backend
+ * (server/server.ts) via POST http://localhost:3001/api/copilot/chat.
+ * No tool-calling / runLocalAction scaffold — Groq just answers in plain
+ * text and we render it. Session history is kept server-side per sessionId.
  */
 
 import React, { useState, useRef, useEffect } from "react";
 import { Bot, X, Send, Sparkles, Loader2 } from "lucide-react";
-import { Complaint, FieldWorker } from "../types";
 
 interface CopilotChatProps {
-  complaints: Complaint[];
-  workers: FieldWorker[];
   onClose: () => void;
-  onSelectComplaint: (id: string) => void;
 }
 
 interface ChatMessage {
@@ -32,18 +23,21 @@ interface ChatMessage {
   content: string;
 }
 
+const COPILOT_API_URL = "http://localhost:3001/api/copilot/chat";
+const SESSION_ID = "admin-dashboard";
+
 const SUGGESTIONS = [
-  "How many critical incidents are unassigned right now?",
-  "Which technician is closest to CIQ-1042?",
-  "Summarize today's SLA risk",
+  "How do I report a civic complaint?",
+  "What is CivicIQ?",
+  "Explain smart governance.",
 ];
 
-export default function CopilotChat({ complaints, workers, onClose, onSelectComplaint }: CopilotChatProps) {
+export default function CopilotChat({ onClose }: CopilotChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
       content:
-        "Ops Copilot online. Ask me about incident load, crew availability, or say something like \"assign the nearest free technician to the worst backlog\".",
+        "👋 Hello! I'm CivicIQ AI Copilot. Ask me anything about civic governance, complaints, public services, or smart city operations.",
     },
   ]);
   const [input, setInput] = useState("");
@@ -54,72 +48,38 @@ export default function CopilotChat({ complaints, workers, onClose, onSelectComp
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
-  // Executes a tool call returned by Claude against the real app state.
-  // Replace this switch with real handlers wired to AdminDashboard's setters
-  // (pass them down as extra props once you move past this scaffold).
-  function runLocalAction(toolName: string, input: Record<string, any>): string {
-    switch (toolName) {
-      case "lookup_incident": {
-        const c = complaints.find((c) => c.id === input.incident_id);
-        if (!c) return `No incident found matching ${input.incident_id}.`;
-        onSelectComplaint(c.id);
-        return `Opened ${c.id} — "${c.title}", priority ${c.aiAnalysis.priorityScore}, status ${c.status}.`;
-      }
-      case "filter_queue": {
-        const matches = complaints.filter(
-          (c) => (!input.severity || c.aiAnalysis.severity === input.severity) && (!input.status || c.status === input.status)
-        );
-        return `Found ${matches.length} matching incidents: ${matches.slice(0, 5).map((c) => c.id).join(", ")}${matches.length > 5 ? "…" : ""}`;
-      }
-      case "summarize_load": {
-        const pending = complaints.filter((c) => c.status === "Pending").length;
-        const critical = complaints.filter((c) => c.aiAnalysis.severity === "Critical" && c.status !== "Resolved").length;
-        const free = workers.filter((w) => w.status === "Available").length;
-        return `${pending} pending, ${critical} critical unresolved, ${free} technicians free right now.`;
-      }
-      default:
-        return "I couldn't map that to an action yet.";
-    }
-  }
-
   async function handleSend(text?: string) {
     const query = (text ?? input).trim();
     if (!query || loading) return;
 
-    const nextMessages: ChatMessage[] = [...messages, { role: "user", content: query }];
-    setMessages(nextMessages);
+    const userMessage: ChatMessage = { role: "user", content: query };
+    setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setLoading(true);
 
     try {
-      // Server-side endpoint — see file header. Falls back to a local
-      // heuristic reply below if the backend isn't wired up yet, so the
-      // component still demos standalone.
-      const res = await fetch("/api/copilot", {
+      const res = await fetch(COPILOT_API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: nextMessages,
-          context: {
-            totalIncidents: complaints.length,
-            availableWorkers: workers.filter((w) => w.status === "Available").length,
-          },
+          sessionId: SESSION_ID,
+          message: query,
         }),
       });
 
-      if (!res.ok) throw new Error("copilot endpoint not available");
+      if (!res.ok) throw new Error("copilot endpoint returned an error");
       const data = await res.json();
 
-      if (data.tool_call) {
-        const result = runLocalAction(data.tool_call.name, data.tool_call.input);
-        setMessages((prev) => [...prev, { role: "assistant", content: data.reply ?? result }]);
-      } else {
-        setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
-      }
-    } catch {
-      // Local fallback so the panel is usable before /api/copilot exists.
-      const reply = runLocalAction("summarize_load", {});
-      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: data.reply ?? "No response." },
+      ]);
+    } catch (err) {
+      console.error(err);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "⚠ Unable to connect to CivicIQ AI Copilot. Is the server running on localhost:3001?" },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -136,7 +96,7 @@ export default function CopilotChat({ complaints, workers, onClose, onSelectComp
             </div>
             <div>
               <h3 className="text-sm font-display font-bold leading-none">Ops Copilot</h3>
-              <span className="text-[10px] text-slate-400 font-mono">Command-center assistant</span>
+              <span className="text-[10px] text-slate-400 font-mono">CivicIQ AI Assistant</span>
             </div>
           </div>
           <button onClick={onClose} className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white">
@@ -191,7 +151,7 @@ export default function CopilotChat({ complaints, workers, onClose, onSelectComp
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Ask about incidents, crews, budget…"
+            placeholder="Ask CivicIQ AI anything..."
             className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-gov-blue"
           />
           <button

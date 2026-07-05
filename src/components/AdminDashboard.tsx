@@ -31,6 +31,7 @@ import {
 import { Complaint, FieldWorker, SmartCityBudget } from "../types";
 import SmartCityMap from "./SmartCityMap";
 import CopilotChat from "./CopilotChat";
+import logo from "../assets/images/civic-ai.png";
 
 interface AdminDashboardProps {
   complaints: Complaint[];
@@ -171,10 +172,9 @@ export default function AdminDashboard({
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 px-6 pt-5 pb-4 border-b border-slate-800/80">
           <div className="flex items-center gap-3">
             <img
-              src="/src/assets/images/civic-ai.png"
+              src={logo}
               alt="CivicIQ Logo"
               className="w-10 h-10 rounded-lg shrink-0 object-cover border border-slate-700"
-              referrerPolicy="no-referrer"
             />
             <div>
               <div className="flex items-center gap-2.5">
@@ -269,15 +269,7 @@ export default function AdminDashboard({
 
       {/* ================= COPILOT SLIDE-OVER ================= */}
       {showCopilot && (
-        <CopilotChat
-          complaints={complaints}
-          workers={workers}
-          onClose={() => setShowCopilot(false)}
-          onSelectComplaint={(id) => {
-            setSelectedIncidentId(id);
-            setAdminTab("overview");
-          }}
-        />
+        <CopilotChat onClose={() => setShowCopilot(false)} />
       )}
 
       {/* ADMIN SCREEN: CORE LIVE OPERATIONS OVERVIEW */}

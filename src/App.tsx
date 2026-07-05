@@ -30,6 +30,7 @@ import CitizenApp from "./components/CitizenApp";
 import AdminDashboard from "./components/AdminDashboard";
 import FieldWorkerApp from "./components/FieldWorkerApp";
 import DesignSystemDocs from "./components/DesignSystemDocs";
+import logo from "./assets/images/civic-ai.png";
 
 export default function App() {
   // Global States representing database persistence
@@ -237,10 +238,9 @@ export default function App() {
         {/* Logo and Seal Title */}
         <div className="flex items-center gap-3">
           <img
-            src="/src/assets/images/civic-ai.png"
+            src={logo}
             alt="CivicIQ Logo"
             className="w-9 h-9 rounded-full shrink-0 object-cover border border-slate-200"
-            referrerPolicy="no-referrer"
           />
           <div>
             <div className="flex items-center gap-2">
