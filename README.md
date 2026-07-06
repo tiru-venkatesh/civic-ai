@@ -298,6 +298,44 @@ git push origin feature/amazing-feature
 Distributed under the MIT License.
 
 ---
+---
+
+# 👥 Team
+
+<table>
+<tr>
+<td align="center">
+<a href="https://github.com/tiru-venkatesh">
+<img src="https://github.com/tiru-venkatesh.png" width="100px;" alt="Tiru Venkatesh"/><br />
+<b>Tiru Venkatesh</b>
+</a>
+</td>
+
+<td align="center">
+<a href="https://github.com/vemalatha22">
+<img src="https://github.com/vemalatha22.png" width="100px;" alt="Vemalatha"/><br />
+<b>Vemalatha</b>
+</a>
+</td>
+
+<td align="center">
+<a href="https://github.com/saibhavagna">
+<img src="https://github.com/saibhavagna.png" width="100px;" alt="Sai Bhavagna"/><br />
+<b>Sai Bhavagna</b>
+</a>
+</td>
+
+<td align="center">
+<a href="https://github.com/Himesh">
+<img src="https://github.com/Himesh.png" width="100px;" alt="Himesh"/><br />
+<b>Himesh</b>
+</a>
+</td>
+</tr>
+</table>
+
+---------------------
+
 
 # 👨‍💻 Author
 
