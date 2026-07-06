@@ -15,6 +15,8 @@ import {
   ArrowRight
 } from "lucide-react";
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://civicbackend-bb8s.onrender.com";
+
 interface Message {
   id: string;
   role: "user" | "assistant";
@@ -110,7 +112,7 @@ export default function AIChatbot({ mode = "floating", activeRole = "landing" }:
           content: m.content
         }));
 
-      const response = await fetch("/api/chat", {
+      const response = await fetch(`${API_BASE}/api/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
