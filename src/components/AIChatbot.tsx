@@ -66,9 +66,12 @@ export default function AIChatbot({ mode = "floating", activeRole = "landing" }:
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom of chat
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
+useEffect(() => {
+  if (messagesContainerRef.current) {
+    messagesContainerRef.current.scrollTop =
+      messagesContainerRef.current.scrollHeight;
+  }
+}, [messages, isLoading]);
 
   // Keep open if embedded
   useEffect(() => {
@@ -236,7 +239,7 @@ export default function AIChatbot({ mode = "floating", activeRole = "landing" }:
               </div>
             </div>
           )}
-          <div ref={messagesEndRef} />
+          <div   ref={messagesContainerRef}   className="flex-1 overflow-y-auto p-4 bg-slate-50 space-y-4" >
         </div>
 
         {/* Suggestions panel */}
@@ -371,7 +374,7 @@ export default function AIChatbot({ mode = "floating", activeRole = "landing" }:
                   </div>
                 </div>
               )}
-              <div ref={messagesEndRef} />
+              <div   ref={messagesContainerRef}   className="flex-1 overflow-y-auto p-4 bg-slate-50 space-y-4" >
             </div>
 
             {/* Suggestions panel */}
