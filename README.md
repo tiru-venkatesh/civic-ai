@@ -30,11 +30,11 @@ Instead of manually reviewing thousands of citizen complaints, reports, surveys,
 
 | Dashboard  | AI Command Center |
 | ---------- | ----------------- |
-| ![](1.jpg) | ![](2.jpg)        |
+| ![](1.jpeg) | ![](2.jpeg)        |
 
 | Smart City Map | Civic Intelligence |
 | -------------- | ------------------ |
-| ![](3.jpg)     | ![](4.jpg)         |
+| ![](3.jpeg)     | ![](4.jpeg)         |
 
 ---
 
