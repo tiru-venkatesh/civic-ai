@@ -28,14 +28,13 @@ Instead of manually reviewing thousands of citizen complaints, reports, surveys,
 
 ## Dashboard Preview
 
-| Dashboard  | AI Command Center |
-| ---------- | ----------------- |
-| ![](1.jpg) | ![](2.jpg)        |
+| Dashboard | AI Command Center |
+|-----------|-------------------|
+| ![](assets/1.jpg) | ![](assets/2.jpg) |
 
 | Smart City Map | Civic Intelligence |
-| -------------- | ------------------ |
-| ![](3.jpg)     | ![](4.jpg)         |
-
+|----------------|--------------------|
+| ![](assets/3.jpg) | ![](assets/4.jpg) |
 ---
 
 # ✨ Features
