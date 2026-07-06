@@ -156,7 +156,7 @@ Civic Data
 Citizen Feedback + Reports + Datasets
       │
       ▼
-      Gemini AI
+      Groq AI
       │
       ▼
 Summarization
