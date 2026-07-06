@@ -150,7 +150,7 @@ export default function LandingPage({ onSelectRole }: LandingPageProps) {
                 onClick={() => scrollToSection("portals")}
                 className="bg-[#1565C0] hover:bg-[#0D47A1] text-white px-6 py-3.5 rounded-xl text-base font-bold transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 focus:ring-4 focus:ring-[#1565C0]/30"
               >
-                <span>Request an Issue</span>
+                <span>Report an Issue</span>
                 <ArrowRight className="h-5 w-5" />
               </button>
               <button
