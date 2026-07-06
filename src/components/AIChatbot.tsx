@@ -112,7 +112,7 @@ export default function AIChatbot({ mode = "floating", activeRole = "landing" }:
           content: m.content
         }));
 
-      const response = await fetch(`${API_BASE}/api/chat`, {
+      const response = await fetch(`${API_BASE}/api/copilot/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
