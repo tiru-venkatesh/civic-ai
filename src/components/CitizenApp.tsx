@@ -313,7 +313,7 @@ export default function CitizenApp({
               <div className="flex flex-col items-center">
                 {/* Official Circular Seal Logo */}
                 <img
-                  src="/src/assets/images/civiciq_logo_1783246559258.jpg"
+                  src="/civiciq-logo.jpg"
                   alt="CivicIQ Seal Logo"
                   className="w-20 h-20 rounded-full object-cover border-2 border-gov-blue shadow-sm mb-4"
                   referrerPolicy="no-referrer"
