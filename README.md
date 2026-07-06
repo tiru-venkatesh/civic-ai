@@ -1,4 +1,4 @@
-# 🏛️ CivicIQ
+# 🏛️ CivicAI
 
 <h3 align="center">AI Decision Intelligence for Smart Civic Governance</h3>
 
@@ -18,9 +18,9 @@ Transforming civic data into intelligent, transparent, and actionable decisions.
 
 ## 🌍 Overview
 
-**CivicIQ** is an AI-powered decision intelligence platform built to help governments, municipalities, and public administrators make smarter, faster, and more transparent decisions.
+**Civic** is an AI-powered decision intelligence platform built to help governments, municipalities, and public administrators make smarter, faster, and more transparent decisions.
 
-Instead of manually reviewing thousands of citizen complaints, reports, surveys, and civic datasets, CivicIQ uses Generative AI to summarize information, detect patterns, predict future risks, and recommend evidence-based policy actions—all from a unified dashboard.
+Instead of manually reviewing thousands of citizen complaints, reports, surveys, and civic datasets, Civic uses Generative AI to summarize information, detect patterns, predict future risks, and recommend evidence-based policy actions—all from a unified dashboard.
 
 ---
 
@@ -81,13 +81,13 @@ Modern dashboards with charts, KPIs, and visual insights for decision-makers.
 
 ---
 
-# 💡 Why CivicIQ?
+# 💡 Why CivicAI?
 
 Modern governments generate massive amounts of civic data every day.
 
 Unfortunately, converting that information into actionable decisions remains slow, manual, and expensive.
 
-CivicIQ bridges this gap using Artificial Intelligence by helping administrators:
+CivicAI bridges this gap using Artificial Intelligence by helping administrators:
 
 * Understand citizen concerns instantly
 * Detect city-wide trends
@@ -352,7 +352,7 @@ https://github.com/tiru-venkatesh
 
 If you found this project helpful, consider giving it a ⭐ on GitHub.
 
-Your support motivates future development and helps more developers discover CivicIQ.
+Your support motivates future development and helps more developers discover CivicAI.
 
 ---
 
