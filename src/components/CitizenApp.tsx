@@ -20,12 +20,10 @@ import {
   Volume2,
   Lock,
   UploadCloud,
-  ChevronDown,
-  MessageCircle
+  ChevronDown
 } from "lucide-react";
 import { Complaint, AIAnalysis } from "../types";
 import SmartCityMap from "./SmartCityMap";
-import CitizenAIChat from "./CitizenAIChat";
 
 // Predefined photo templates for quick click-to-upload simulation
 const SAMPLE_PHOTOS = [
@@ -79,9 +77,9 @@ export default function CitizenApp({
   onViewComplaintDetails,
 }: CitizenAppProps) {
   // Mobile app screens navigation
-  // "splash" | "login" | "signup" | "home" | "submit" | "aichat" | "confirm" | "history" | "profile" | "settings"
+  // "splash" | "login" | "signup" | "home" | "submit" | "confirm" | "history" | "profile" | "settings"
   const [screen, setScreen] = useState<
-    "splash" | "login" | "signup" | "home" | "submit" | "aichat" | "confirm" | "history" | "profile" | "settings"
+    "splash" | "login" | "signup" | "home" | "submit" | "confirm" | "history" | "profile" | "settings"
   >("splash");
 
   // User auth state
@@ -303,30 +301,10 @@ export default function CitizenApp({
   };
 
   return (
-    <div className="flex justify-center py-4 bg-slate-100">
-      {/* Smartphone Physical Shell Frame */}
-      <div className="w-[390px] h-[812px] bg-white rounded-[44px] shadow-2xl border-[11px] border-slate-900 overflow-hidden relative flex flex-col font-sans select-none">
-        
-        {/* Device Notch Header */}
-        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-40 h-[22px] bg-slate-900 rounded-b-2xl z-30 flex items-center justify-between px-6">
-          <span className="w-3.5 h-3.5 bg-slate-800 rounded-full"></span>
-          <span className="w-10 h-1 bg-slate-800 rounded-full"></span>
-        </div>
-
-        {/* Dynamic Status Bar */}
-        <div className="bg-white px-6 pt-3 pb-1.5 flex items-center justify-between text-[11px] font-bold text-slate-700 z-20 shrink-0 font-mono">
-          <span>09:41</span>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[9px] uppercase bg-slate-200 px-1 py-0.2 rounded font-bold">5G</span>
-            <span>98%</span>
-            <span className="w-4 h-2.5 bg-slate-800 rounded-sm inline-block relative border border-slate-700">
-              <span className="absolute right-0.5 top-0.5 w-1 h-1 bg-white"></span>
-            </span>
-          </div>
-        </div>
-
-        {/* Internal Screen Workspace */}
-        <div className="flex-1 overflow-y-auto bg-slate-50 relative flex flex-col">
+    <div className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col font-sans min-h-[700px]">
+      
+      {/* Internal Screen Workspace */}
+      <div className="flex-1 overflow-y-auto bg-slate-50 relative flex flex-col">
           
           {/* SCREEN: SPLASH */}
           {screen === "splash" && (
@@ -335,7 +313,7 @@ export default function CitizenApp({
               <div className="flex flex-col items-center">
                 {/* Official Circular Seal Logo */}
                 <img
-                  src="/src/assets/images/civic-ai.png"
+                  src="/src/assets/images/civiciq_logo_1783246559258.jpg"
                   alt="CivicIQ Seal Logo"
                   className="w-20 h-20 rounded-full object-cover border-2 border-gov-blue shadow-sm mb-4"
                   referrerPolicy="no-referrer"
@@ -466,22 +444,13 @@ export default function CitizenApp({
                     <h3 className="font-display font-semibold text-lg">Report Infrastructure Hazard</h3>
                     <p className="text-xs text-blue-100 mt-1">Submit visual or audio proof. CivicIQ AI will instantly parse, prioritize, and trigger technician dispatch.</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <button
-                      onClick={() => setScreen("submit")}
-                      className="w-full py-3 bg-white hover:bg-slate-50 text-gov-blue font-bold text-xs rounded-xl shadow transition-colors flex items-center justify-center gap-2"
-                    >
-                      <UploadCloud className="h-4.5 w-4.5" />
-                      <span>Form Intake</span>
-                    </button>
-                    <button
-                      onClick={() => setScreen("aichat")}
-                      className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow transition-colors flex items-center justify-center gap-2"
-                    >
-                      <MessageCircle className="h-4.5 w-4.5" />
-                      <span>Chat Intake</span>
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => setScreen("submit")}
+                    className="w-full py-3 bg-white hover:bg-slate-50 text-gov-blue font-bold text-xs rounded-xl shadow transition-colors flex items-center justify-center gap-2"
+                  >
+                    <UploadCloud className="h-4.5 w-4.5" />
+                    <span>Initiate AI Dispatch Intake</span>
+                  </button>
                 </div>
 
                 {/* Submissions Section */}
@@ -573,20 +542,6 @@ export default function CitizenApp({
                 </button>
               </div>
             </div>
-          )}
-
-          {/* SCREEN: AI CHAT INTAKE */}
-          {screen === "aichat" && (
-            <CitizenAIChat
-              complaints={complaints}
-              reporterName={user?.name}
-              onSubmitComplaint={(c) => {
-                onSubmitComplaint(c);
-                setLastSubmittedId(c.id);
-                setScreen("confirm");
-              }}
-              onClose={() => setScreen("home")}
-            />
           )}
 
           {/* SCREEN: SUBMIT COMPLAINT FORM */}
@@ -1012,13 +967,6 @@ export default function CitizenApp({
               </div>
             </div>
           )}
-
-        </div>
-
-        {/* Device Bottom Bar Handle indicator */}
-        <div className="bg-white py-2 flex justify-center shrink-0 z-30">
-          <span className="w-32 h-1 bg-slate-300 rounded-full"></span>
-        </div>
 
       </div>
     </div>

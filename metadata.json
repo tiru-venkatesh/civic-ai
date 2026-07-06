@@ -1,5 +1,5 @@
 {
-  "name": "Remix: CivicIQ",
+  "name": "Remix: Civic-AI",
   "description": "AI Decision Intelligence Platform for Smart Governance - A high-fidelity interactive dashboard and mobile system for Citizens, Administrators, and Field Workers to manage smart city operations.",
   "requestFramePermissions": [
     "geolocation"

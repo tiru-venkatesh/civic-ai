@@ -46,11 +46,12 @@ export default function SmartCityMap({
     detail?: string;
   } | null>(null);
 
-  // Constants for map boundaries
-  const minLat = 40.7100;
-  const maxLat = 40.7400;
-  const minLng = -74.0200;
-  const maxLng = -73.9800;
+  // Constants for map boundaries — Rajahmundry Municipal Corporation sector
+  // (spans across the Godavari from Innespeta/Danavaipeta on the north bank to Kovvur on the south bank)
+  const minLat = 16.9800;
+  const maxLat = 17.0200;
+  const minLng = 81.7600;
+  const maxLng = 81.8200;
 
   const mapCoordsToSvg = (lat: number, lng: number) => {
     const x = ((lng - minLng) / (maxLng - minLng)) * 800;
@@ -76,50 +77,48 @@ export default function SmartCityMap({
     onMapClick(Number(lat.toFixed(6)), Number(lng.toFixed(6)));
   };
 
-  // Predefined vector layouts representing streets, parks, and rivers
+  // Predefined vector layouts representing the Godavari, parks/landmarks, and roads
   const rivers = [
-    // Hudson River (left side)
-    "M 0,0 L 110,0 L 150,150 L 120,350 L 180,600 L 0,600 Z",
-    // East River (bottom right)
-    "M 720,600 L 680,480 L 710,380 L 800,320 L 800,600 Z"
+    // River Godavari — broad diagonal band running through the city, north bank to south (Kovvur) bank
+    "M 0,340 L 200,300 L 380,330 L 560,300 L 800,340 L 800,460 L 560,430 L 380,455 L 200,425 L 0,460 Z"
   ];
 
   const parks = [
-    // Washington Square Park area
-    { x: 380, y: 180, w: 90, h: 55, label: "Washington Square Park" },
-    // Union Square
-    { x: 520, y: 120, w: 40, h: 45, label: "Union Square Park" },
-    // Battery Park (bottom left)
-    { x: 190, y: 520, w: 80, h: 60, label: "City Hall Common" }
+    // Kotagummam Park / central green belt near Main Road
+    { x: 360, y: 150, w: 95, h: 55, label: "Kotagummam Park" },
+    // Government Arts College Grounds
+    { x: 540, y: 120, w: 70, h: 50, label: "Govt. Arts College Grounds" },
+    // Godavari Ghat Garden (riverfront promenade)
+    { x: 180, y: 250, w: 90, h: 45, label: "Godavari Ghat Garden" }
   ];
 
   const mainRoads = [
-    // Broadway (Diagonal main road)
-    { path: "M 320,0 L 450,220 L 520,350 L 590,510 L 620,600", label: "Broadway", traffic: "heavy" },
-    // Canal St (Cross street)
-    { path: "M 110,300 L 800,380", label: "Canal St", traffic: "jammed" },
-    // Greenwich St
-    { path: "M 180,100 L 260,350 L 300,600", label: "Greenwich St", traffic: "light" },
-    // Lafayette St
-    { path: "M 530,0 L 560,300 L 610,600", label: "Lafayette St", traffic: "light" },
-    // E 4th St
-    { path: "M 350,150 L 800,210", label: "East 4th St", traffic: "light" },
-    // Grand St
-    { path: "M 120,400 L 800,450", label: "Grand St", traffic: "moderate" }
+    // Main Road (T-Chowrastha towards Innespeta)
+    { path: "M 300,0 L 420,180 L 470,300 L 520,420 L 560,600", label: "Main Road", traffic: "heavy" },
+    // Court Road (cross street)
+    { path: "M 100,260 L 800,300", label: "Court Road", traffic: "jammed" },
+    // Danavaipeta Road
+    { path: "M 160,80 L 240,300 L 280,600", label: "Danavaipeta Road", traffic: "light" },
+    // Innespeta Main Street
+    { path: "M 520,0 L 550,260 L 600,600", label: "Innespeta Main Street", traffic: "light" },
+    // T-Chowrastha to Devi Chowk Link
+    { path: "M 330,130 L 800,190", label: "T-Chowrastha Link", traffic: "light" },
+    // Godavari Bridge Road (crosses river towards Kovvur)
+    { path: "M 100,380 L 800,410", label: "Godavari Bridge Road", traffic: "moderate" }
   ];
 
   const priorityZones = [
-    // School Zone (Accident threat)
+    // School / pedestrian safety corridor near Main Road
     {
-      points: "320,130 480,140 460,240 330,220",
-      name: "Union-Broadway School Pedestrian Safety Corridor",
+      points: "300,120 460,130 440,230 310,210",
+      name: "Main Road – Kotagummam School Safety Corridor",
       color: "rgba(249, 115, 22, 0.08)",
       stroke: "#F97316"
     },
-    // High-water Risk Zone
+    // Godavari flood elevation risk zone (riverfront low-lying areas)
     {
-      points: "150,310 310,330 290,480 130,460",
-      name: "Greenwich-Canal Flood Elevation Zone",
+      points: "140,300 300,320 280,470 120,450",
+      name: "Godavari Ghat Flood Elevation Zone",
       color: "rgba(37, 99, 235, 0.06)",
       stroke: "#2563EB"
     }
@@ -183,16 +182,19 @@ export default function SmartCityMap({
           </defs>
           <rect width="800" height="600" fill="url(#grid)" />
 
-          {/* Hudson & East Rivers */}
+          {/* River Godavari */}
           {rivers.map((pathStr, idx) => (
             <path key={`river-${idx}`} d={pathStr} fill="#E0F2FE" stroke="#BAE6FD" strokeWidth="1" />
           ))}
+          <text x="60" y="395" fill="#0369A1" fontSize="11" fontWeight="600" className="font-mono uppercase tracking-wider">
+            River Godavari
+          </text>
 
-          {/* Parks */}
+          {/* Parks / Landmarks */}
           {parks.map((p, idx) => (
             <g key={`park-${idx}`}>
               <rect x={p.x} y={p.y} width={p.w} height={p.h} fill="#DCFCE7" rx="6" stroke="#BBF7D0" strokeWidth="1" />
-              <text x={p.x + p.w / 2} y={p.y + p.h / 2 + 4} fill="#166534" fontSize="10" fontWeight="500" textAnchor="middle" className="font-sans pointer-events-none">
+              <text x={p.x + p.w / 2} y={p.y + p.h / 2 + 4} fill="#166534" fontSize="9" fontWeight="500" textAnchor="middle" className="font-sans pointer-events-none">
                 {p.label}
               </text>
             </g>
@@ -202,16 +204,15 @@ export default function SmartCityMap({
           {showPriorityZones && priorityZones.map((z, idx) => (
             <g key={`zone-${idx}`}>
               <polygon points={z.points} fill={z.color} stroke={z.stroke} strokeWidth="1.5" strokeDasharray="4 3" />
-              {/* Draw tiny shield/warning icon coordinate near center */}
               <text
-                x={idx === 0 ? 390 : 210}
-                y={idx === 0 ? 190 : 380}
+                x={idx === 0 ? 320 : 150}
+                y={idx === 0 ? 170 : 340}
                 fill={z.stroke}
                 fontSize="9"
                 fontWeight="600"
                 className="font-mono bg-white uppercase tracking-wider"
               >
-                ⚠️ {idx === 0 ? "PEDESTRIAN ZONE" : "FLOOD PLAIN"}
+                ⚠️ {idx === 0 ? "SCHOOL ZONE" : "FLOOD PLAIN"}
               </text>
             </g>
           ))}
@@ -240,8 +241,8 @@ export default function SmartCityMap({
           })}
 
           {/* Text Labels for Roads */}
-          <text x="350" y="50" fill="#64748B" fontSize="9" fontWeight="500" transform="rotate(58 350 50)" className="font-mono">Broadway</text>
-          <text x="240" y="325" fill="#64748B" fontSize="9" fontWeight="500" transform="rotate(6 240 325)" className="font-mono">Canal St</text>
+          <text x="330" y="50" fill="#64748B" fontSize="9" fontWeight="500" transform="rotate(58 330 50)" className="font-mono">Main Road</text>
+          <text x="220" y="270" fill="#64748B" fontSize="9" fontWeight="500" transform="rotate(4 220 270)" className="font-mono">Court Road</text>
 
           {/* Heatmap Layer */}
           {showHeatmap && complaints.map((c) => {
@@ -263,10 +264,10 @@ export default function SmartCityMap({
           {/* Complaint Clusters (dotted rings around high clusters) */}
           {showClusters && (
             <g>
-              {/* Hardcoded visual cluster representing Broadway high-density area */}
-              <circle cx="452" cy="225" r="35" fill="none" stroke="#6366F1" strokeWidth="1" strokeDasharray="3 3 animate-pulse" />
-              <rect x="422" y="245" width="60" height="15" rx="3" fill="#6366F1" />
-              <text x="452" y="255" fill="#FFFFFF" fontSize="9" fontWeight="600" textAnchor="middle" className="font-mono">
+              {/* Hardcoded visual cluster representing Main Road high-density area */}
+              <circle cx="440" cy="225" r="35" fill="none" stroke="#6366F1" strokeWidth="1" strokeDasharray="3 3 animate-pulse" />
+              <rect x="410" y="245" width="60" height="15" rx="3" fill="#6366F1" />
+              <text x="440" y="255" fill="#FFFFFF" fontSize="9" fontWeight="600" textAnchor="middle" className="font-mono">
                 CL-1 (2)
               </text>
             </g>
@@ -438,7 +439,7 @@ export default function SmartCityMap({
       <div className="p-3 bg-white border-t border-slate-200 flex flex-wrap items-center justify-between gap-2.5 text-xs text-slate-600 font-medium">
         <div className="flex items-center gap-2">
           <Navigation className="h-4 w-4 text-slate-400" />
-          <span className="text-slate-800 font-mono">Boundaries: NYC Central Sector (40.71°N to 40.74°N)</span>
+          <span className="text-slate-800 font-mono">Boundaries: Rajahmundry Municipal Corp. (16.98°N to 17.02°N)</span>
         </div>
         <div className="text-[10px] text-slate-400 font-mono uppercase bg-slate-100 px-2 py-0.5 rounded">
           Vectors: 100% Vector Canvas Layer

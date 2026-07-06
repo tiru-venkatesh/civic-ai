@@ -25,13 +25,11 @@ import {
   Info,
   Layers2,
   Navigation,
-  X,
-  Bot
+  X
 } from "lucide-react";
 import { Complaint, FieldWorker, SmartCityBudget } from "../types";
 import SmartCityMap from "./SmartCityMap";
-import CopilotChat from "./CopilotChat";
-import logo from "../assets/images/civic-ai.png";
+import WeatherImpactMonitor, { WeatherData } from "./WeatherImpactMonitor";
 
 interface AdminDashboardProps {
   complaints: Complaint[];
@@ -46,108 +44,144 @@ export default function AdminDashboard({
   onAssignWorker,
   onUpdateStatus,
 }: AdminDashboardProps) {
+  // Navigation tabs for Admin Workspace
+  // "overview" | "reports" | "workers" | "simulator"
+  const [adminTab, setAdminTab] = useState<"overview" | "reports" | "workers" | "simulator">("overview");
 
-  // Safe fallbacks
-  const complaintList = Array.isArray(complaints) ? complaints : [];
-  const workerList = Array.isArray(workers) ? workers : [];
+  // Selected complaint in the list for detail view & explainability drawer
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(complaints[0]?.id || null);
 
-  const [adminTab, setAdminTab] = useState<
-    "overview" | "reports" | "workers" | "simulator"
-  >("overview");
-
-  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(
-    complaintList[0]?.id ?? null
-  );
-
+  // Filter criteria states
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [severityFilter, setSeverityFilter] = useState("All");
 
-  const [budgetMultiplier, setBudgetMultiplier] = useState(1.0);
+  // Budget Simulation Multiplier State
+  const [budgetMultiplier, setBudgetMultiplier] = useState(1.0); // 1.0x to 2.5x
 
+  // Map layer toggle states
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [showClusters, setShowClusters] = useState(true);
   const [showWorkers, setShowWorkers] = useState(true);
   const [showTraffic, setShowTraffic] = useState(true);
   const [showPriorityZones, setShowPriorityZones] = useState(true);
 
-  const [assigningIncidentId, setAssigningIncidentId] =
-    useState<string | null>(null);
+  // Assignment Modal/State helper
+  const [assigningIncidentId, setAssigningIncidentId] = useState<string | null>(null);
 
+  // PDF Download simulation state
   const [downloadingPDF, setDownloadingPDF] = useState(false);
 
-  const [showCopilot, setShowCopilot] = useState(false);
+  // Weather states
+  const [weatherData, setWeatherData] = useState<WeatherData>({
+    temp: 20.0,
+    condition: "Clear Weather",
+    rain: 0,
+    windSpeed: 10,
+    humidity: 50,
+    severity: "Low"
+  });
+  const [weatherOverride, setWeatherOverride] = useState<string>("None");
 
-  const selectedIncident =
-    complaintList.find((c) => c.id === selectedIncidentId) ?? null;
+  const activeCondition = weatherOverride !== "None" ? weatherOverride : weatherData.condition;
+  
+  let weatherImpact = 0;
+  let weatherReason = "Clear weather conditions. Standard priority matrix applied.";
 
-  const filteredComplaints = complaintList.filter((c) => {
+  if (activeCondition === "Flood Warning") {
+    weatherImpact = 40;
+    weatherReason = "Flood warning active. Sub-surface water logging threatens electrical systems and asphalt base layers. AI automatically escalated the incident.";
+  } else if (activeCondition === "Thunderstorm") {
+    weatherImpact = 30;
+    weatherReason = "Severe thunderstorm detected. High likelihood of immediate electrical discharge hazards and signal control failures. AI automatically escalated the incident.";
+  } else if (activeCondition === "Heavy Rain") {
+    weatherImpact = 20;
+    weatherReason = "Heavy rainfall increases the probability of road collapse and waterlogging. AI automatically escalated the incident.";
+  } else if (activeCondition.includes("Strong Wind") || weatherData.windSpeed > 40) {
+    weatherImpact = 15;
+    weatherReason = "Strong wind velocities exceeding 40 km/h risk downing overhead street cables and road signs. AI automatically escalated the incident.";
+  } else if (activeCondition.includes("Heatwave") || weatherData.temp > 40) {
+    weatherImpact = 10;
+    weatherReason = "Dangerous heatwave conditions (>40°C) cause asphalt softening and increase risk of electrical transformer overheating. AI automatically escalated the incident.";
+  }
+
+  // Create adjusted complaints with weather influence
+  const adjustedComplaints = complaints.map(c => {
+    if (c.status === "Resolved") {
+      return {
+        ...c,
+        weatherAdjusted: {
+          originalPriority: c.aiAnalysis.priorityScore,
+          impact: 0,
+          finalPriority: c.aiAnalysis.priorityScore,
+          reasoning: "Complaint resolved and archived. No active weather adjustments applied.",
+          hasChanged: false
+        }
+      };
+    }
+
+    const finalPriority = Math.min(100, c.aiAnalysis.priorityScore + weatherImpact);
+    return {
+      ...c,
+      aiAnalysis: {
+        ...c.aiAnalysis,
+        priorityScore: finalPriority
+      },
+      weatherAdjusted: {
+        originalPriority: c.aiAnalysis.priorityScore,
+        impact: weatherImpact,
+        finalPriority,
+        reasoning: weatherReason,
+        hasChanged: weatherImpact > 0
+      }
+    };
+  });
+
+  const selectedIncident = adjustedComplaints.find((c) => c.id === selectedIncidentId);
+
+  // Filtered complaints list (ignoring duplicates in the main ranking table for cleaner presentation, although they can be shown)
+  const filteredComplaints = adjustedComplaints.filter((c) => {
     const matchesSearch =
       c.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.address.toLowerCase().includes(searchQuery.toLowerCase());
-
-    const matchesCategory =
-      categoryFilter === "All" || c.category === categoryFilter;
-
-    const matchesSeverity =
-      severityFilter === "All" || c.aiAnalysis.severity === severityFilter;
-
+    const matchesCategory = categoryFilter === "All" || c.category === categoryFilter;
+    const matchesSeverity = severityFilter === "All" || c.aiAnalysis.severity === severityFilter;
     return matchesSearch && matchesCategory && matchesSeverity;
   });
 
-  const totalReports = complaintList.length;
-
-  const resolvedCount = complaintList.filter(
-    (c) => c.status === "Resolved"
-  ).length;
-
-  const pendingCount = complaintList.filter(
-    (c) => c.status === "Pending"
-  ).length;
-
-  const inProgressCount = complaintList.filter(
-    (c) => c.status === "In Progress" || c.status === "Assigned"
-  ).length;
+  // KPI Calculations
+  const totalReports = adjustedComplaints.length;
+  const resolvedCount = adjustedComplaints.filter((c) => c.status === "Resolved").length;
+  const pendingCount = adjustedComplaints.filter((c) => c.status === "Pending").length;
+  const inProgressCount = adjustedComplaints.filter((c) => c.status === "In Progress" || c.status === "Assigned").length;
 
   const totalAllocatedBudget = 450000;
+  const spentBudget = adjustedComplaints.reduce((sum, c) => sum + (c.status === "Resolved" ? c.aiAnalysis.budgetRequired : 0), 0) + 124000;
+  const activeBudgetRequired = adjustedComplaints.reduce((sum, c) => sum + (c.status !== "Resolved" ? c.aiAnalysis.budgetRequired : 0), 0);
 
-  const spentBudget =
-    complaintList.reduce(
-      (sum, c) =>
-        sum +
-        (c.status === "Resolved"
-          ? c.aiAnalysis.budgetRequired
-          : 0),
-      0
-    ) + 124000;
+  // Summary Metrics calculations for Weather Monitor
+  const openAdjustedComplaints = adjustedComplaints.filter(c => c.status !== "Resolved");
+  const affectedIncidentsCount = weatherImpact > 0 ? openAdjustedComplaints.length : 0;
+  const avgPriorityIncrease = weatherImpact;
+  
+  const highestAdjustedIncidentRaw = weatherImpact > 0 && openAdjustedComplaints.length > 0
+    ? [...openAdjustedComplaints].sort((a, b) => b.aiAnalysis.priorityScore - a.aiAnalysis.priorityScore)[0]
+    : null;
 
-  const activeBudgetRequired =
-    complaintList.reduce(
-      (sum, c) =>
-        sum +
-        (c.status !== "Resolved"
-          ? c.aiAnalysis.budgetRequired
-          : 0),
-      0
-    );
+  const highestAdjustedIncident = highestAdjustedIncidentRaw 
+    ? {
+        id: highestAdjustedIncidentRaw.id,
+        title: highestAdjustedIncidentRaw.title,
+        priority: highestAdjustedIncidentRaw.aiAnalysis.priorityScore
+      }
+    : null;
 
-  const budgetPct = Math.min(
-    100,
-    Math.round((spentBudget / totalAllocatedBudget) * 100)
-  );
+  // Simulation Calculations based on multiplier slider
+  const simulatedSpeedupPercentage = Math.round((budgetMultiplier - 1.0) * 140);
+  const simulatedWaitTimeCompression = Math.round((1 - (1 / budgetMultiplier)) * 100);
+  const simulatedTechnicianEfficiency = Math.round((budgetMultiplier - 1.0) * 45 + 100);
 
-  const simulatedSpeedupPercentage = Math.round(
-    (budgetMultiplier - 1) * 140
-  );
-
-  const simulatedWaitTimeCompression = Math.round(
-    (1 - 1 / budgetMultiplier) * 100
-  );
-
-  const simulatedTechnicianEfficiency = Math.round(
-    (budgetMultiplier - 1) * 45 + 100
-  );
   const handleDownloadPDF = () => {
     setDownloadingPDF(true);
     setTimeout(() => {
@@ -156,125 +190,121 @@ export default function AdminDashboard({
     }, 1500);
   };
 
-  const severityBarColor = (sev: string) => {
-    if (sev === "Critical") return "bg-red-500";
-    if (sev === "High") return "bg-orange-400";
-    if (sev === "Medium") return "bg-amber-400";
-    return "bg-slate-300";
-  };
-
   return (
     <div className="space-y-6">
-
-      {/* ================= OPS CONSOLE HEADER STRIP ================= */}
-      <div className="bg-slate-900 rounded-2xl overflow-hidden shadow-lg border border-slate-800">
-        {/* Title + tabs row */}
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 px-6 pt-5 pb-4 border-b border-slate-800/80">
-          <div className="flex items-center gap-3">
-            <img
-              src={logo}
-              alt="CivicIQ Logo"
-              className="w-10 h-10 rounded-lg shrink-0 object-cover border border-slate-700"
-            />
-            <div>
-              <div className="flex items-center gap-2.5">
-                <h1 className="text-xl font-display font-bold text-white leading-none tracking-tight">Command Center Workspace</h1>
-                <span className="text-[9px] uppercase font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full inline-block animate-pulse"></span>
-                  <span>Active Link</span>
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 mt-1 max-w-md">
-                Secure administrative dashboard for multi-agent prioritization and smart-city dispatch routing.
-              </p>
-            </div>
+      
+      {/* Upper Navigation & Tabs */}
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-gov-blue text-white flex items-center justify-center font-bold text-lg shadow-sm">
+            IQ
           </div>
-
-          <div className="flex items-center gap-2.5 self-start xl:self-center">
-            {/* Copilot trigger */}
-            <button
-              onClick={() => setShowCopilot(true)}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold font-mono shadow-md transition-all"
-            >
-              <Bot className="h-4 w-4" />
-              <span>Ops Copilot</span>
-            </button>
-
-            {/* Tab selector */}
-            <div className="flex items-center gap-1 bg-slate-800/80 p-1 rounded-lg border border-slate-700 font-mono text-xs">
-              {([
-                ["overview", "1. Live Ops"],
-                ["reports", "2. Reports"],
-                ["workers", `3. Crew (${workers.length})`],
-                ["simulator", "4. Simulator"],
-              ] as const).map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => setAdminTab(key)}
-                  className={`px-3.5 py-2 rounded-md font-semibold transition-colors ${
-                    adminTab === key ? "bg-white text-slate-900 shadow-sm" : "text-slate-300 hover:text-white"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-display font-bold text-slate-900 leading-none">Command Center Workspace</h1>
+              <span className="text-[9px] uppercase font-mono font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block animate-pulse"></span>
+                <span>Active Link</span>
+              </span>
             </div>
+            <p className="text-xs text-slate-500 mt-1">
+              Secure administrative dashboard for multi-agent prioritization and smart-city dispatch routing.
+            </p>
           </div>
         </div>
 
-        {/* KPI strip embedded in the same console panel */}
-        <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-slate-800/80">
-          <div className="p-5">
-            <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wider font-mono">Total Complaints</div>
-            <div className="text-3xl font-bold mt-1 text-white font-mono">{totalReports}</div>
-            <div className="text-slate-500 text-[10px] font-mono mt-1.5 flex items-center gap-1">
-              <FileText className="h-3 w-3" />
-              All citizen portals linked
-            </div>
-          </div>
-
-          <div className="p-5">
-            <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wider font-mono">Active Pending</div>
-            <div className="text-3xl font-bold mt-1 text-white font-mono">{pendingCount}</div>
-            <div className="text-red-400 text-[10px] font-mono mt-1.5 flex items-center gap-1">
-              <AlertTriangle className="h-3 w-3" />
-              Requires triage
-            </div>
-          </div>
-
-          <div className="p-5">
-            <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wider font-mono">Resolved Total</div>
-            <div className="text-3xl font-bold mt-1 text-white font-mono">{resolvedCount}</div>
-            <div className="text-emerald-400 text-[10px] font-mono mt-1.5 flex items-center gap-1">
-              <CheckCircle className="h-3 w-3" />
-              {Math.round((resolvedCount / totalReports) * 100)}% clearance rate
-            </div>
-          </div>
-
-          <div className="p-5">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500 text-[10px] font-bold uppercase tracking-wider font-mono">Allocated Budget</span>
-              <span className="text-[9px] font-mono text-slate-500">{budgetPct}%</span>
-            </div>
-            <div className="text-3xl font-bold mt-1 text-white font-mono">${spentBudget.toLocaleString()}</div>
-            <div className="mt-2 h-1 w-full bg-slate-800 rounded-full overflow-hidden">
-              <div className="h-full bg-blue-500 rounded-full" style={{ width: `${budgetPct}%` }}></div>
-            </div>
-            <div className="text-slate-500 text-[9px] font-mono mt-1.5">
-              of ${totalAllocatedBudget.toLocaleString()} max limit
-            </div>
-          </div>
+        {/* Tab Selector */}
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg border border-slate-200 self-start xl:self-center font-mono text-xs">
+          <button
+            onClick={() => setAdminTab("overview")}
+            className={`px-4 py-2 rounded-md font-semibold transition-colors ${
+              adminTab === "overview" ? "bg-white text-gov-blue shadow-sm" : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            1. Core Live Ops
+          </button>
+          <button
+            onClick={() => setAdminTab("reports")}
+            className={`px-4 py-2 rounded-md font-semibold transition-colors ${
+              adminTab === "reports" ? "bg-white text-gov-blue shadow-sm" : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            2. Analytics Reports
+          </button>
+          <button
+            onClick={() => setAdminTab("workers")}
+            className={`px-4 py-2 rounded-md font-semibold transition-colors ${
+              adminTab === "workers" ? "bg-white text-gov-blue shadow-sm" : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            3. Field Crew ({workers.length})
+          </button>
+          <button
+            onClick={() => setAdminTab("simulator")}
+            className={`px-4 py-2 rounded-md font-semibold transition-colors ${
+              adminTab === "simulator" ? "bg-white text-gov-blue shadow-sm" : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            4. "What-If" Simulator
+          </button>
         </div>
       </div>
-
-      {/* ================= COPILOT SLIDE-OVER ================= */}
-      {showCopilot && (
-        <CopilotChat onClose={() => setShowCopilot(false)} />
-      )}
 
       {/* ADMIN SCREEN: CORE LIVE OPERATIONS OVERVIEW */}
       {adminTab === "overview" && (
         <div className="space-y-6 animate-fade-in">
+          
+          {/* KPI Dashboard Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+              <div className="text-slate-500 text-xs font-bold uppercase tracking-wider font-mono">Total Complaints</div>
+              <div className="text-3xl font-bold mt-1 text-slate-900 font-mono">{totalReports}</div>
+              <div className="text-slate-500 text-[10px] font-bold font-mono mt-2 flex items-center gap-1">
+                <FileText className="h-3 w-3 text-gov-blue" />
+                All citizen portals linked
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+              <div className="text-slate-500 text-xs font-bold uppercase tracking-wider font-mono">Active Pending</div>
+              <div className="text-3xl font-bold mt-1 text-slate-900 font-mono">{pendingCount}</div>
+              <div className="text-red-600 text-[10px] font-bold font-mono mt-2 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3 animate-pulse" />
+                Requires triage
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+              <div className="text-slate-500 text-xs font-bold uppercase tracking-wider font-mono">Resolved Total</div>
+              <div className="text-3xl font-bold mt-1 text-slate-900 font-mono">{resolvedCount}</div>
+              <div className="text-emerald-600 text-[10px] font-bold font-mono mt-2 flex items-center gap-1">
+                <CheckCircle className="h-3 w-3" />
+                {Math.round((resolvedCount / totalReports) * 100)}% clearance rate
+              </div>
+            </div>
+
+            {/* Solid primary color card as in Geometric Balance theme */}
+            <div className="bg-gov-blue p-5 rounded-xl shadow-md text-white border border-gov-blue">
+              <div className="opacity-80 text-xs font-bold uppercase tracking-wider font-mono font-semibold">Allocated Budget</div>
+              <div className="text-3xl font-bold mt-1 font-mono">${spentBudget.toLocaleString()}</div>
+              <div className="text-white/90 text-[10px] font-bold font-mono mt-2 flex items-center gap-1 uppercase tracking-wide">
+                <DollarSign className="h-3 w-3" />
+                Max limit: ${totalAllocatedBudget.toLocaleString()}
+              </div>
+            </div>
+          </div>
+
+          {/* Environmental Command: Weather Impact Monitor */}
+          <WeatherImpactMonitor
+            onWeatherChange={(data, override) => {
+              setWeatherData(data);
+              setWeatherOverride(override);
+            }}
+            affectedIncidentsCount={affectedIncidentsCount}
+            avgPriorityIncrease={avgPriorityIncrease}
+            highestAdjustedIncident={highestAdjustedIncident}
+            onInspectIncident={(id) => setSelectedIncidentId(id)}
+          />
 
           {/* Interactive GIS Command Map Section with toggles */}
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden p-4 space-y-4">
@@ -287,30 +317,52 @@ export default function AdminDashboard({
                 </div>
               </div>
 
-              {/* Layer Controls — segmented pill group */}
-              <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 rounded-lg border border-slate-200 font-mono text-[10px] font-semibold">
-                {[
-                  { key: "heatmap", label: "Heatmap", icon: Flame, on: showHeatmap, set: setShowHeatmap, activeClass: "bg-red-500 text-white" },
-                  { key: "clusters", label: "Clustering", icon: Layers2, on: showClusters, set: setShowClusters, activeClass: "bg-indigo-500 text-white" },
-                  { key: "workers", label: "Technicians", icon: Users, on: showWorkers, set: setShowWorkers, activeClass: "bg-gov-blue text-white" },
-                  { key: "traffic", label: "Traffic", icon: Navigation, on: showTraffic, set: setShowTraffic, activeClass: "bg-amber-500 text-white" },
-                ].map(({ key, label, icon: Icon, on, set, activeClass }) => (
-                  <button
-                    key={key}
-                    onClick={() => set(!on)}
-                    className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-all ${
-                      on ? activeClass + " shadow-sm" : "text-slate-500 hover:text-slate-800"
-                    }`}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    <span>{label}</span>
-                  </button>
-                ))}
+              {/* Layer Controls Dashboard */}
+              <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] text-slate-600 font-semibold">
+                <button
+                  onClick={() => setShowHeatmap(!showHeatmap)}
+                  className={`px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-all ${
+                    showHeatmap ? "bg-red-50 text-red-600 border-red-200" : "bg-white border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  <Flame className="h-3.5 w-3.5" />
+                  <span>Heatmap {showHeatmap ? "ON" : "OFF"}</span>
+                </button>
+
+                <button
+                  onClick={() => setShowClusters(!showClusters)}
+                  className={`px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-all ${
+                    showClusters ? "bg-indigo-50 text-indigo-600 border-indigo-200" : "bg-white border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  <Layers2 className="h-3.5 w-3.5" />
+                  <span>Clustering {showClusters ? "ON" : "OFF"}</span>
+                </button>
+
+                <button
+                  onClick={() => setShowWorkers(!showWorkers)}
+                  className={`px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-all ${
+                    showWorkers ? "bg-blue-50 text-gov-blue border-blue-200" : "bg-white border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  <span>Live Technicians {showWorkers ? "ON" : "OFF"}</span>
+                </button>
+
+                <button
+                  onClick={() => setShowTraffic(!showTraffic)}
+                  className={`px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-all ${
+                    showTraffic ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-white border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  <Navigation className="h-3.5 w-3.5" />
+                  <span>Traffic Overlay {showTraffic ? "ON" : "OFF"}</span>
+                </button>
               </div>
             </div>
 
             <SmartCityMap
-              complaints={complaints}
+              complaints={adjustedComplaints}
               workers={workers}
               selectedComplaintId={selectedIncidentId}
               onSelectComplaint={(id) => setSelectedIncidentId(id)}
@@ -325,7 +377,7 @@ export default function AdminDashboard({
 
           {/* Table & Detailed Explainability Drawer split layout */}
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-
+            
             {/* Table side (7 columns on XL) */}
             <div className="xl:col-span-7 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
               <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/70">
@@ -355,11 +407,11 @@ export default function AdminDashboard({
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 font-mono text-slate-600">
-                      <th className="p-3 font-semibold"></th>
                       <th className="p-3 font-semibold">Incident ID</th>
                       <th className="p-3 font-semibold">Primary Title</th>
                       <th className="p-3 font-semibold text-center">Priority</th>
                       <th className="p-3 font-semibold">Status</th>
+                      <th className="p-3 font-semibold">Severity</th>
                       <th className="p-3 font-semibold text-right">Actions</th>
                     </tr>
                   </thead>
@@ -370,6 +422,10 @@ export default function AdminDashboard({
                       if (c.status === "Resolved") badge = "bg-emerald-50 text-emerald-700 border-emerald-200";
                       else if (c.status === "In Progress") badge = "bg-blue-50 text-blue-700 border-blue-200";
 
+                      let severityBadge = "bg-slate-100 text-slate-700";
+                      if (c.aiAnalysis.severity === "Critical") severityBadge = "bg-red-100 text-red-700 font-bold";
+                      else if (c.aiAnalysis.severity === "High") severityBadge = "bg-orange-100 text-orange-700";
+
                       return (
                         <tr
                           key={c.id}
@@ -378,21 +434,30 @@ export default function AdminDashboard({
                             isSelected ? "bg-gov-blue-light/40 font-semibold" : ""
                           }`}
                         >
-                          <td className="pl-3">
-                            <span className={`block w-1.5 h-6 rounded-full ${severityBarColor(c.aiAnalysis.severity)}`} title={c.aiAnalysis.severity}></span>
-                          </td>
                           <td className="p-3 font-bold text-slate-900">{c.id}</td>
                           <td className="p-3 font-sans font-medium text-slate-800 truncate max-w-[150px]">
                             {c.title}
                           </td>
                           <td className="p-3 text-center">
-                            <span className="font-bold text-gov-blue bg-gov-blue-light px-2 py-0.5 rounded">
-                              {c.aiAnalysis.priorityScore}
-                            </span>
+                            <div className="flex flex-col items-center justify-center gap-0.5">
+                              <span className="font-bold text-gov-blue bg-gov-blue-light px-2 py-0.5 rounded">
+                                {c.aiAnalysis.priorityScore}
+                              </span>
+                              {c.weatherAdjusted && c.weatherAdjusted.hasChanged && (
+                                <span className="text-[8px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 rounded font-bold uppercase tracking-tight scale-90 whitespace-nowrap">
+                                  Weather +{c.weatherAdjusted.impact}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="p-3">
                             <span className={`text-[9px] px-2 py-0.5 border rounded-full uppercase font-bold ${badge}`}>
                               {c.status}
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            <span className={`text-[9px] px-2 py-0.5 rounded uppercase font-bold ${severityBadge}`}>
+                              {c.aiAnalysis.severity}
                             </span>
                           </td>
                           <td className="p-3 text-right">
@@ -418,6 +483,7 @@ export default function AdminDashboard({
             <div className="xl:col-span-5 bg-white border border-slate-200 border-l-4 border-l-gov-blue rounded-xl shadow-sm p-5 space-y-4">
               {selectedIncident ? (
                 <>
+                  {/* Header Title */}
                   <div className="border-b border-slate-100 pb-3 flex items-start justify-between">
                     <div>
                       <span className="text-[10px] font-mono text-slate-400 block uppercase">
@@ -426,21 +492,33 @@ export default function AdminDashboard({
                       <h4 className="font-display font-semibold text-slate-800 text-sm mt-0.5">
                         Explainable AI Diagnostics
                       </h4>
+                      <div className="inline-block mt-1 bg-gov-blue/10 text-gov-blue px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider italic">
+                        Explainable Engine
+                      </div>
                     </div>
-                    <span className="text-xs font-mono font-bold text-gov-blue bg-gov-blue-light px-2.5 py-1 rounded">
-                      Score: {selectedIncident.aiAnalysis.priorityScore}/100
-                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="text-xs font-mono font-bold text-gov-blue bg-gov-blue-light px-2.5 py-1 rounded">
+                        Score: {selectedIncident.aiAnalysis.priorityScore}/100
+                      </span>
+                      {selectedIncident.weatherAdjusted && selectedIncident.weatherAdjusted.hasChanged && (
+                        <span className="text-[8px] font-mono font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded uppercase tracking-wider animate-pulse whitespace-nowrap">
+                          Weather Adjusted (+{selectedIncident.weatherAdjusted.impact})
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="bg-slate-900 rounded-lg p-3 text-[10px] font-mono text-slate-400 leading-relaxed">
-                    <span className="font-bold text-slate-300 block uppercase text-[9px] mb-1">
+                  {/* Mathematical priority formula */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-[10px] font-mono text-slate-500 leading-relaxed">
+                    <span className="font-bold text-slate-700 block uppercase text-[9px] mb-1">
                       Priority Weights Algorithm Formula:
                     </span>
-                    <code className="text-emerald-400">
-                      Priority = (Severity × 0.40) + (Population × 0.25) + (Delay × 0.20) + (Risk × 0.15)
+                    <code>
+                      Priority = (Severity Weight × 0.40) + (Population Affected Weight × 0.25) + (Delay Impact × 0.20) + (Weather/Risk × 0.15)
                     </code>
                   </div>
 
+                  {/* Explanations Grid */}
                   <div className="space-y-3 text-xs">
                     <div className="grid grid-cols-2 gap-3 font-mono text-[10px]">
                       <div className="border border-slate-100 p-2.5 rounded-lg bg-white">
@@ -467,15 +545,47 @@ export default function AdminDashboard({
                       </div>
                     </div>
 
+                    {selectedIncident.weatherAdjusted && selectedIncident.weatherAdjusted.hasChanged && (
+                      <div className="border border-amber-200 border-l-4 border-l-amber-500 p-3.5 rounded-lg bg-amber-50/50 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] uppercase font-mono font-bold text-amber-800 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></span>
+                            AI Weather Adjustment Active
+                          </span>
+                          <span className="text-[10px] font-mono font-bold text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded">
+                            +{selectedIncident.weatherAdjusted.impact} Priority escalation
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 font-mono text-[9px] text-center bg-white/70 p-2 rounded-md border border-amber-100">
+                          <div>
+                            <span className="text-slate-400 block">Original</span>
+                            <span className="text-slate-700 font-bold text-xs">{selectedIncident.weatherAdjusted.originalPriority}</span>
+                          </div>
+                          <div className="border-x border-slate-100">
+                            <span className="text-slate-400 block">Impact</span>
+                            <span className="text-amber-600 font-bold text-xs">+{selectedIncident.weatherAdjusted.impact}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block">Final Score</span>
+                            <span className="text-slate-900 font-bold text-xs">{selectedIncident.weatherAdjusted.finalPriority}</span>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-amber-800 font-sans leading-relaxed italic">
+                          "{selectedIncident.weatherAdjusted.reasoning}"
+                        </p>
+                      </div>
+                    )}
+
                     <div className="border border-slate-100 border-l-4 border-l-gov-blue p-3.5 rounded-lg bg-slate-50/50 space-y-1">
                       <span className="text-[10px] uppercase font-mono font-bold text-gov-blue block">
-                        Agent Logic & Reasoning:
+                        Agent Logic & Reasoning Explanation:
                       </span>
                       <p className="text-xs text-slate-700 font-sans italic leading-relaxed">
                         "{selectedIncident.aiAnalysis.reasoning}"
                       </p>
                     </div>
 
+                    {/* Timeline History Tracker */}
                     <div className="space-y-2 border-t border-slate-100 pt-3">
                       <span className="text-[10px] uppercase font-mono font-bold text-slate-400 block">
                         Lifecycle Event Audit Trail
@@ -494,6 +604,7 @@ export default function AdminDashboard({
                       </div>
                     </div>
 
+                    {/* Live Assignment Dispatch */}
                     <div className="border-t border-slate-100 pt-3 flex gap-2">
                       <button
                         onClick={() => setAssigningIncidentId(selectedIncident.id)}
@@ -542,46 +653,102 @@ export default function AdminDashboard({
               </button>
             </div>
 
+            {/* Custom high-fidelity CSS charts representation */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+              
+              {/* Performance by Department */}
               <div className="border border-slate-200 rounded-xl p-4 space-y-4 bg-slate-50/50">
                 <h4 className="text-xs font-mono font-bold uppercase text-slate-500">Department SLA Performance</h4>
                 <div className="space-y-3 font-mono text-[11px] text-slate-600">
-                  {[
-                    ["Transportation (Road/Pothole)", 94, "bg-gov-blue"],
-                    ["Water Resources (Leakage/Flood)", 89, "bg-blue-500"],
-                    ["Public Works (Streetlights)", 78, "bg-amber-500"],
-                    ["Sanitation Services (Hazmat/Trash)", 96, "bg-emerald-500"],
-                  ].map(([label, pct, color]) => (
-                    <div className="space-y-1" key={label as string}>
-                      <div className="flex justify-between">
-                        <span>{label}</span>
-                        <span className="font-bold">{pct}%</span>
-                      </div>
-                      <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
-                        <div className={`${color} h-full rounded-full`} style={{ width: `${pct}%` }}></div>
-                      </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between">
+                      <span>Transportation (Road/Pothole)</span>
+                      <span className="font-bold">94% (Within 6h Target)</span>
                     </div>
-                  ))}
+                    <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                      <div className="bg-gov-blue h-full rounded-full" style={{ width: "94%" }}></div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex justify-between">
+                      <span>Water Resources (Leakage/Flood)</span>
+                      <span className="font-bold">89% (Within 8h Target)</span>
+                    </div>
+                    <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                      <div className="bg-blue-500 h-full rounded-full" style={{ width: "89%" }}></div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex justify-between">
+                      <span>Public Works (Streetlights)</span>
+                      <span className="font-bold">78% (Within 12h Target)</span>
+                    </div>
+                    <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                      <div className="bg-amber-500 h-full rounded-full" style={{ width: "78%" }}></div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex justify-between">
+                      <span>Sanitation Services (Hazmat/Trash)</span>
+                      <span className="font-bold">96% (Within 3h Target)</span>
+                    </div>
+                    <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                      <div className="bg-emerald-500 h-full rounded-full" style={{ width: "96%" }}></div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
+              {/* Resolution volume over time (Weekly) */}
               <div className="border border-slate-200 rounded-xl p-4 space-y-4 bg-slate-50/50">
                 <h4 className="text-xs font-mono font-bold uppercase text-slate-500">Weekly Incident Intake & Resolution</h4>
+                
+                {/* Styled Vector Line Chart representation */}
                 <div className="h-36 relative flex items-end justify-between font-mono text-[9px] text-slate-400">
-                  {[
-                    ["Mon", 16, 12],
-                    ["Tue", 20, 14],
-                    ["Wed", 28, 22],
-                    ["Thu", 32, 26],
-                    ["Fri", 24, 20],
-                  ].map(([day, intake, resolved]) => (
-                    <div className="flex-1 flex flex-col items-center gap-1" key={day as string}>
-                      <div className="w-8 bg-blue-100 rounded-t relative" style={{ height: `${intake}px` }}>
-                        <div className="w-8 bg-gov-blue rounded-t absolute bottom-0" style={{ height: `${resolved}px` }}></div>
-                      </div>
-                      <span>{day}</span>
+                  <div className="absolute inset-0 flex flex-col justify-between pointer-events-none border-b border-slate-200">
+                    <div className="border-b border-slate-100 h-0 w-full"></div>
+                    <div className="border-b border-slate-100 h-0 w-full"></div>
+                    <div className="border-b border-slate-100 h-0 w-full"></div>
+                  </div>
+
+                  {/* Draw simple visual bars / heights */}
+                  <div className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-8 bg-blue-100 rounded-t h-16 relative">
+                      <div className="w-8 bg-gov-blue rounded-t h-12 absolute bottom-0"></div>
                     </div>
-                  ))}
+                    <span>Mon</span>
+                  </div>
+
+                  <div className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-8 bg-blue-100 rounded-t h-20 relative">
+                      <div className="w-8 bg-gov-blue rounded-t h-14 absolute bottom-0"></div>
+                    </div>
+                    <span>Tue</span>
+                  </div>
+
+                  <div className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-8 bg-blue-100 rounded-t h-28 relative">
+                      <div className="w-8 bg-gov-blue rounded-t h-22 absolute bottom-0"></div>
+                    </div>
+                    <span>Wed</span>
+                  </div>
+
+                  <div className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-8 bg-blue-100 rounded-t h-32 relative">
+                      <div className="w-8 bg-gov-blue rounded-t h-26 absolute bottom-0"></div>
+                    </div>
+                    <span>Thu</span>
+                  </div>
+
+                  <div className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-8 bg-blue-100 rounded-t h-24 relative">
+                      <div className="w-8 bg-gov-blue rounded-t h-20 absolute bottom-0"></div>
+                    </div>
+                    <span>Fri</span>
+                  </div>
                 </div>
                 <div className="flex items-center gap-3 justify-center text-[10px] font-mono text-slate-500 pt-2 border-t border-slate-100">
                   <div className="flex items-center gap-1.5">
@@ -594,6 +761,7 @@ export default function AdminDashboard({
                   </div>
                 </div>
               </div>
+
             </div>
           </div>
         </div>
@@ -679,6 +847,8 @@ export default function AdminDashboard({
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+              
+              {/* Slider side (5 cols) */}
               <div className="lg:col-span-5 border border-slate-200 rounded-xl p-5 space-y-4 bg-slate-50/50">
                 <div className="flex justify-between font-mono text-xs text-slate-600">
                   <span className="font-bold text-slate-800">EXPAND BUDGET MULTIPLIER:</span>
@@ -687,6 +857,7 @@ export default function AdminDashboard({
                   </span>
                 </div>
 
+                {/* Slider input */}
                 <input
                   type="range"
                   min="1.0"
@@ -709,7 +880,9 @@ export default function AdminDashboard({
                 </div>
               </div>
 
+              {/* Numerical predictive metrics outputs (7 cols) */}
               <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                
                 <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-sm space-y-1">
                   <span className="text-[10px] text-slate-400 block font-mono uppercase">Resolution Speedup</span>
                   <h4 className="text-3xl font-mono font-bold text-emerald-600">+{simulatedSpeedupPercentage}%</h4>
@@ -727,13 +900,15 @@ export default function AdminDashboard({
                   <h4 className="text-3xl font-mono font-bold text-indigo-600">{simulatedTechnicianEfficiency}%</h4>
                   <p className="text-[10px] text-slate-500 font-medium">Adaptive route loading index</p>
                 </div>
+
               </div>
+
             </div>
           </div>
         </div>
       )}
 
-      {/* DISPATCH/ASSIGN WORKER MODAL */}
+      {/* DISPATCH/ASSIGN WORKER MODAL (Absolute Overlay backdrop) */}
       {assigningIncidentId && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-slate-200 rounded-xl shadow-2xl p-6 w-full max-w-md space-y-5 animate-scale-up">
@@ -756,6 +931,7 @@ export default function AdminDashboard({
               </p>
             </div>
 
+            {/* Crew options list */}
             <div className="space-y-2 max-h-56 overflow-y-auto">
               {workers.map((w) => (
                 <button

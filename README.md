@@ -1,91 +1,20 @@
-# CivicIQ
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
+</div>
 
-**AI Decision Intelligence for Smart Civic Governance**
+# Run and deploy your AI Studio app
 
-CivicIQ helps governments and public administrators make faster, data-driven decisions using artificial intelligence. It analyzes civic data, summarizes citizen feedback, and generates actionable recommendations through an intuitive dashboard.
+This contains everything you need to run your app locally.
 
----
+View your app in AI Studio: https://ai.studio/apps/b55da71b-59c9-422a-97a1-430ca1c3c871
 
-## Features
+## Run Locally
 
-- AI-powered policy recommendations
-- Civic analytics dashboard
-- Citizen feedback analysis
-- Predictive insights
-- Explainable AI responses
-- Interactive data visualizations
+**Prerequisites:**  Node.js
 
----
 
-## Tech Stack
-
-- React
-- TypeScript
-- Vite
-- Google Gemini API
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- Gemini API Key
-
-### Installation
-
-```bash
-git clone https://github.com/tiru-venkatesh/civic-ai.git
-
-cd civic-ai
-
-npm install
-```
-
-Create a `.env.local` file:
-
-```env
-GEMINI_API_KEY=YOUR_API_KEY
-```
-
-Start the development server:
-
-```bash
-npm run dev
-```
-
-Build for production:
-
-```bash
-npm run build
-```
-
----
-
-## Project Structure
-
-```
-src/
-├── components/
-├── services/
-├── hooks/
-├── utils/
-└── App.tsx
-```
-
----
-
-## Roadmap
-
-- Multi-language support
-- GIS map integration
-- Real-time civic data
-- AI-powered reporting
-- Voice-enabled assistant
-
----
-
-## License
-
-This project is licensed under the MIT License.
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`
