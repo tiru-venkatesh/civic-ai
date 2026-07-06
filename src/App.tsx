@@ -256,7 +256,7 @@ export default function App() {
           {/* Logo Brand Header */}
           <div className="p-5 border-b border-slate-100 flex items-center gap-3 cursor-pointer select-none" onClick={() => setActiveRole("landing")}>
             <img
-              src="/src/assets/images/civiciq_logo_1783246559258.jpg"
+              src="/civiciq-logo.jpg"
               alt="CIVIC-AI Logo"
               className="w-9 h-9 rounded-full shrink-0 object-cover border border-slate-200"
               referrerPolicy="no-referrer"
@@ -409,7 +409,7 @@ export default function App() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer select-none" onClick={() => setActiveRole("landing")}>
             <img
-              src="/src/assets/images/civiciq_logo_1783246559258.jpg"
+              src="/civiciq-logo.jpg"
               alt="CIVIC-AI Logo"
               className="w-7 h-7 rounded-full shrink-0 object-cover border border-slate-200"
               referrerPolicy="no-referrer"
