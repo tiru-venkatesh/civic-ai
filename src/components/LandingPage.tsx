@@ -51,7 +51,7 @@ export default function LandingPage({ onSelectRole }: LandingPageProps) {
           {/* Logo & Platform Name */}
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
             <img
-              src="/src/assets/images/civiciq_logo_1783246559258.jpg"
+              src="/civiciq-logo.jpg"
               alt="CIVIC-AI Logo"
               className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0"
               referrerPolicy="no-referrer"
@@ -605,7 +605,7 @@ export default function LandingPage({ onSelectRole }: LandingPageProps) {
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <img
-                src="/src/assets/images/civiciq_logo_1783246559258.jpg"
+                src="/civiciq-logo.jpg"
                 alt="CivicIQ Logo"
                 className="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0"
                 referrerPolicy="no-referrer"
