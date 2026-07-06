@@ -62,16 +62,11 @@ export default function AIChatbot({ mode = "floating", activeRole = "landing" }:
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [scrollY, setScrollY] = useState(0);
-  
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom of chat
-useEffect(() => {
-  if (messagesContainerRef.current) {
-    messagesContainerRef.current.scrollTop =
-      messagesContainerRef.current.scrollHeight;
-  }
-}, [messages, isLoading]);
+  // Auto-scroll removed intentionally — the message list no longer forces
+  // the viewport to the bottom on new messages. If you want a manual
+  // "jump to latest" button instead, this ref is the hook point.
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Keep open if embedded
   useEffect(() => {
@@ -131,7 +126,7 @@ useEffect(() => {
       }
 
       const data = await response.json();
-      
+
       const assistantMessage: Message = {
         id: `msg-ai-${Date.now()}`,
         role: "assistant",
@@ -142,16 +137,16 @@ useEffect(() => {
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error: any) {
       console.warn("Could not retrieve live Gemini response. Switching to rule-based fallback assistant.", error);
-      
+
       let fallbackText = "I'm currently running in emergency backup mode due to network status, but I can help you with system guidelines:\n\n";
       const query = textToSend.toLowerCase();
 
       if (query.includes("duplicate") || query.includes("ciq-2026-006")) {
         fallbackText += "• **Duplicate Resolution**: If two reports are within 20 meters and have matching categories, the system automatically flags the second as a duplicate (like *CIQ-2026-006* merged under *CIQ-2026-001*). This ensures we do not double-book crews or waste budget assets.";
       } else if (query.includes("sinkhole") || query.includes("ciq-2026-001") || query.includes("broadway")) {
-        fallbackText += "• **Active Sinkhole (CIQ-2026-001)**: This is a **Critical** severity report located at 640 Broadway. It has a priority score of **96/100** and has been assigned to Senior Civil Engineer **Srikar** (Department of Transportation).";
+        fallbackText += "• **Active Sinkhole (CIQ-2026-001)**: This is a **Critical** severity report located at 640 Broadway. It has a priority score of **96/100** and has been assigned to Senior Civil Engineer **Marcus Vance** (Department of Transportation).";
       } else if (query.includes("crew") || query.includes("worker") || query.includes("roster") || query.includes("marcus")) {
-        fallbackText += "• **Technician Roster**:\n  - **Srikar** (Senior Civil Engineer, DOT): Currently active on Broadway repairing the sinkhole risk.\n  - **Elena Rostova** (Hydrological Technician): Available for dispatch.\n  - **Pratap** (Electrical Inspector): Active at Canal St repairing dead traffic lights.\n  - **Siddharth Mehta** (Sanitation Expert): Available (recently cleared a biohazard alleyway at Union Square).";
+        fallbackText += "• **Technician Roster**:\n  - **Marcus Vance** (Senior Civil Engineer, DOT): Currently active on Broadway repairing the sinkhole risk.\n  - **Elena Rostova** (Hydrological Technician): Available for dispatch.\n  - **Darnell Jackson** (Electrical Inspector): Active at Canal St repairing dead traffic lights.\n  - **Siddharth Mehta** (Sanitation Expert): Available (recently cleared a biohazard alleyway at Union Square).";
       } else if (query.includes("govllm") || query.includes("model") || query.includes("triage")) {
         fallbackText += "• **GovLLM Triage Engine**: This model parses citizen transcripts, text descriptions, and photos to automatically categorize issues, estimate budget/repair hours, and generate a final Priority score based on population affected and public safety hazard variables.";
       } else {
@@ -239,7 +234,7 @@ useEffect(() => {
               </div>
             </div>
           )}
-          <div   ref={messagesContainerRef}   className="flex-1 overflow-y-auto p-4 bg-slate-50 space-y-4" >
+          <div ref={messagesEndRef} />
         </div>
 
         {/* Suggestions panel */}
@@ -374,7 +369,7 @@ useEffect(() => {
                   </div>
                 </div>
               )}
-              <div   ref={messagesContainerRef}   className="flex-1 overflow-y-auto p-4 bg-slate-50 space-y-4" >
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Suggestions panel */}
