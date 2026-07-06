@@ -3,25 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useRef, useState, useCallback } from "react";
-import { Loader } from "@googlemaps/js-api-loader";
-import { MarkerClusterer } from "@googlemaps/markerclusterer";
-import { MapPin, Users, Navigation, Layers } from "lucide-react";
+import React, { useState } from "react";
+import { MapPin, Users, Flame, Navigation, AlertTriangle, Layers } from "lucide-react";
 import { Complaint, FieldWorker } from "../types";
-
-/**
- * SETUP REQUIRED
- * --------------
- * 1. npm install @googlemaps/js-api-loader @googlemaps/markerclusterer
- * 2. Add to your .env:
- *      VITE_GOOGLE_MAPS_API_KEY=your_api_key_here
- * 3. Enable the "Maps JavaScript API" (and "Places API" if you use autocomplete
- *    elsewhere) on the same GCP project that owns the Map ID below.
- * 4. The Map ID (civic-ai) was created in Google Maps Platform > Map Management.
- *    It carries the cloud-based styling and is required for Advanced Markers.
- */
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string;
-const MAP_ID = "848e06ac11ba501230550cb7"; // civic-ai
 
 interface SmartCityMapProps {
   complaints?: Complaint[];
@@ -39,59 +23,6 @@ interface SmartCityMapProps {
   heightClass?: string;
 }
 
-// Rajahmundry Municipal Corporation sector — same bounds as the old SVG map,
-// used only to center/fit the real map and to place the two priority zones.
-const CITY_CENTER = { lat: 17.0015, lng: 81.7905 };
-
-const PRIORITY_ZONES: {
-  name: string;
-  color: string;
-  strokeColor: string;
-  path: { lat: number; lng: number }[];
-}[] = [
-  {
-    name: "Main Road – Kotagummam School Safety Corridor",
-    color: "#F97316",
-    strokeColor: "#F97316",
-    path: [
-      { lat: 17.0146, lng: 81.7900 },
-      { lat: 17.0143, lng: 81.8006 },
-      { lat: 17.0068, lng: 81.7994 },
-      { lat: 17.0080, lng: 81.7911 }
-    ]
-  },
-  {
-    name: "Godavari Ghat Flood Elevation Zone",
-    color: "#2563EB",
-    strokeColor: "#2563EB",
-    path: [
-      { lat: 17.0000, lng: 81.7740 },
-      { lat: 16.9980, lng: 81.7860 },
-      { lat: 16.9905, lng: 81.7845 },
-      { lat: 16.9922, lng: 81.7730 }
-    ]
-  }
-];
-
-let loaderInstance: Loader | null = null;
-function getLoader() {
-  if (!loaderInstance) {
-    loaderInstance = new Loader({
-      apiKey: GOOGLE_MAPS_API_KEY,
-      version: "weekly"
-    });
-  }
-  return loaderInstance;
-}
-
-function severityColor(c: Complaint): string {
-  if (c.status === "Resolved") return "#10B981";
-  if (c.aiAnalysis.severity === "Critical") return "#EF4444";
-  if (c.aiAnalysis.severity === "High") return "#F97316";
-  if (c.aiAnalysis.severity === "Medium") return "#F59E0B";
-  return "#3B82F6";
-}
-
 export default function SmartCityMap({
   complaints = [],
   workers = [],
@@ -105,326 +36,96 @@ export default function SmartCityMap({
   showWorkers = true,
   showTraffic = false,
   showPriorityZones = true,
-  heightClass = "h-[450px]"
+  heightClass = "h-[450px]",
 }: SmartCityMapProps) {
-  const mapDivRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<google.maps.Map | null>(null);
-  const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
-  const clickListenerRef = useRef<google.maps.MapsEventListener | null>(null);
+  const [hoveredEntity, setHoveredEntity] = useState<{
+    x: number;
+    y: number;
+    title: string;
+    type: "complaint" | "worker" | "pin";
+    detail?: string;
+  } | null>(null);
 
-  const complaintMarkersRef = useRef<Map<string, google.maps.marker.AdvancedMarkerElement>>(new Map());
-  const workerMarkersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
-  const manualPinMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
-  const heatmapRef = useRef<google.maps.visualization.HeatmapLayer | null>(null);
-  const trafficLayerRef = useRef<google.maps.TrafficLayer | null>(null);
-  const zoneOverlaysRef = useRef<google.maps.Polygon[]>([]);
-  const clustererRef = useRef<MarkerClusterer | null>(null);
+  // Constants for map boundaries — Rajahmundry Municipal Corporation sector
+  // (spans across the Godavari from Innespeta/Danavaipeta on the north bank to Kovvur on the south bank)
+  const minLat = 16.9800;
+  const maxLat = 17.0200;
+  const minLng = 81.7600;
+  const maxLng = 81.8200;
 
-  const [isReady, setIsReady] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const markerLibRef = useRef<google.maps.MarkerLibrary | null>(null);
-  const vizLibRef = useRef<google.maps.VisualizationLibrary | null>(null);
+  const mapCoordsToSvg = (lat: number, lng: number) => {
+    const x = ((lng - minLng) / (maxLng - minLng)) * 800;
+    const y = 600 - ((lat - minLat) / (maxLat - minLat)) * 600;
+    return { x, y };
+  };
 
-  // ---- One-time map initialization -----------------------------------
-  useEffect(() => {
-    let cancelled = false;
+  const handleMapClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!interactiveMode || !onMapClick) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
 
-    if (!GOOGLE_MAPS_API_KEY) {
-      setLoadError("Missing VITE_GOOGLE_MAPS_API_KEY — add it to your .env file.");
-      return;
+    // Scale back to viewBox coordinates (800x600)
+    const svgX = (clickX / rect.width) * 800;
+    const svgY = (clickY / rect.height) * 600;
+
+    // Convert SVG x,y back to Lat, Lng
+    const lng = minLng + (svgX / 800) * (maxLng - minLng);
+    const lat = minLat + ((600 - svgY) / 600) * (maxLat - minLat);
+
+    // Round for clean coordinate printing
+    onMapClick(Number(lat.toFixed(6)), Number(lng.toFixed(6)));
+  };
+
+  // Predefined vector layouts representing the Godavari, parks/landmarks, and roads
+  const rivers = [
+    // River Godavari — broad diagonal band running through the city, north bank to south (Kovvur) bank
+    "M 0,340 L 200,300 L 380,330 L 560,300 L 800,340 L 800,460 L 560,430 L 380,455 L 200,425 L 0,460 Z"
+  ];
+
+  const parks = [
+    // Kotagummam Park / central green belt near Main Road
+    { x: 360, y: 150, w: 95, h: 55, label: "Kotagummam Park" },
+    // Government Arts College Grounds
+    { x: 540, y: 120, w: 70, h: 50, label: "Govt. Arts College Grounds" },
+    // Godavari Ghat Garden (riverfront promenade)
+    { x: 180, y: 250, w: 90, h: 45, label: "Godavari Ghat Garden" }
+  ];
+
+  const mainRoads = [
+    // Main Road (T-Chowrastha towards Innespeta)
+    { path: "M 300,0 L 420,180 L 470,300 L 520,420 L 560,600", label: "Main Road", traffic: "heavy" },
+    // Court Road (cross street)
+    { path: "M 100,260 L 800,300", label: "Court Road", traffic: "jammed" },
+    // Danavaipeta Road
+    { path: "M 160,80 L 240,300 L 280,600", label: "Danavaipeta Road", traffic: "light" },
+    // Innespeta Main Street
+    { path: "M 520,0 L 550,260 L 600,600", label: "Innespeta Main Street", traffic: "light" },
+    // T-Chowrastha to Devi Chowk Link
+    { path: "M 330,130 L 800,190", label: "T-Chowrastha Link", traffic: "light" },
+    // Godavari Bridge Road (crosses river towards Kovvur)
+    { path: "M 100,380 L 800,410", label: "Godavari Bridge Road", traffic: "moderate" }
+  ];
+
+  const priorityZones = [
+    // School / pedestrian safety corridor near Main Road
+    {
+      points: "300,120 460,130 440,230 310,210",
+      name: "Main Road – Kotagummam School Safety Corridor",
+      color: "rgba(249, 115, 22, 0.08)",
+      stroke: "#F97316"
+    },
+    // Godavari flood elevation risk zone (riverfront low-lying areas)
+    {
+      points: "140,300 300,320 280,470 120,450",
+      name: "Godavari Ghat Flood Elevation Zone",
+      color: "rgba(37, 99, 235, 0.06)",
+      stroke: "#2563EB"
     }
-
-    (async () => {
-      try {
-        const loader = getLoader();
-        const { Map } = await loader.importLibrary("maps");
-        const markerLib = (await loader.importLibrary("marker")) as google.maps.MarkerLibrary;
-        const vizLib = (await loader.importLibrary("visualization")) as google.maps.VisualizationLibrary;
-
-        if (cancelled || !mapDivRef.current) return;
-
-        markerLibRef.current = markerLib;
-        vizLibRef.current = vizLib;
-
-        const map = new Map(mapDivRef.current, {
-          center: CITY_CENTER,
-          zoom: 14,
-          mapId: MAP_ID,
-          disableDefaultUI: false,
-          streetViewControl: false,
-          fullscreenControl: false,
-          clickableIcons: false
-        });
-
-        mapRef.current = map;
-        infoWindowRef.current = new google.maps.InfoWindow();
-
-        setIsReady(true);
-      } catch (err: any) {
-        console.error("Google Maps failed to load:", err);
-        if (!cancelled) setLoadError(err.message || "Failed to load Google Maps.");
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // ---- Interactive click-to-drop-pin -----------------------------------
-  useEffect(() => {
-    if (!isReady || !mapRef.current) return;
-
-    if (clickListenerRef.current) {
-      clickListenerRef.current.remove();
-      clickListenerRef.current = null;
-    }
-
-    if (interactiveMode && onMapClick) {
-      clickListenerRef.current = mapRef.current.addListener(
-        "click",
-        (e: google.maps.MapMouseEvent) => {
-          if (!e.latLng) return;
-          onMapClick(
-            Number(e.latLng.lat().toFixed(6)),
-            Number(e.latLng.lng().toFixed(6))
-          );
-        }
-      );
-    }
-
-    return () => {
-      clickListenerRef.current?.remove();
-      clickListenerRef.current = null;
-    };
-  }, [isReady, interactiveMode, onMapClick]);
-
-  // ---- Priority zone polygons -----------------------------------
-  useEffect(() => {
-    if (!isReady || !mapRef.current) return;
-
-    zoneOverlaysRef.current.forEach((poly) => poly.setMap(null));
-    zoneOverlaysRef.current = [];
-
-    if (showPriorityZones) {
-      PRIORITY_ZONES.forEach((zone) => {
-        const polygon = new google.maps.Polygon({
-          paths: zone.path,
-          strokeColor: zone.strokeColor,
-          strokeOpacity: 0.9,
-          strokeWeight: 1.5,
-          fillColor: zone.color,
-          fillOpacity: 0.08,
-          map: mapRef.current!
-        });
-        polygon.addListener("click", () => {
-          infoWindowRef.current?.setContent(
-            `<div style="font:600 12px monospace;color:${zone.strokeColor}">⚠️ ${zone.name}</div>`
-          );
-          infoWindowRef.current?.setPosition(zone.path[0]);
-          infoWindowRef.current?.open(mapRef.current!);
-        });
-        zoneOverlaysRef.current.push(polygon);
-      });
-    }
-  }, [isReady, showPriorityZones]);
-
-  // ---- Traffic layer -----------------------------------
-  useEffect(() => {
-    if (!isReady || !mapRef.current) return;
-
-    if (showTraffic) {
-      if (!trafficLayerRef.current) {
-        trafficLayerRef.current = new google.maps.TrafficLayer();
-      }
-      trafficLayerRef.current.setMap(mapRef.current);
-    } else {
-      trafficLayerRef.current?.setMap(null);
-    }
-  }, [isReady, showTraffic]);
-
-  // ---- Heatmap layer (Critical/High, non-duplicate complaints) --------
-  useEffect(() => {
-    if (!isReady || !mapRef.current || !vizLibRef.current) return;
-
-    heatmapRef.current?.setMap(null);
-    heatmapRef.current = null;
-
-    if (showHeatmap) {
-      const points = complaints
-        .filter(
-          (c) =>
-            !c.aiAnalysis.isDuplicate &&
-            (c.aiAnalysis.severity === "Critical" || c.aiAnalysis.severity === "High")
-        )
-        .map((c) => ({
-          location: new google.maps.LatLng(c.latitude, c.longitude),
-          weight: c.aiAnalysis.severity === "Critical" ? 3 : 1.5
-        }));
-
-      if (points.length > 0) {
-        heatmapRef.current = new vizLibRef.current.HeatmapLayer({
-          data: points,
-          map: mapRef.current,
-          radius: 40,
-          opacity: 0.5
-        });
-      }
-    }
-  }, [isReady, showHeatmap, complaints]);
-
-  // ---- Complaint markers (+ optional clustering) -----------------------
-  useEffect(() => {
-    if (!isReady || !mapRef.current || !markerLibRef.current) return;
-
-    // Clear previous markers/clusterer
-    clustererRef.current?.clearMarkers();
-    complaintMarkersRef.current.forEach((m) => (m.map = null));
-    complaintMarkersRef.current.clear();
-
-    const { AdvancedMarkerElement, PinElement } = markerLibRef.current;
-    const newMarkers: google.maps.marker.AdvancedMarkerElement[] = [];
-
-    complaints.forEach((c) => {
-      const isSelected = selectedComplaintId === c.id;
-      const color = c.aiAnalysis.isDuplicate ? "#94A3B8" : severityColor(c);
-
-      const pin = new PinElement({
-        background: color,
-        borderColor: "#FFFFFF",
-        glyphColor: "#FFFFFF",
-        scale: c.aiAnalysis.isDuplicate ? 0.6 : isSelected ? 1.2 : 0.9
-      });
-
-      const marker = new AdvancedMarkerElement({
-        map: mapRef.current!,
-        position: { lat: c.latitude, lng: c.longitude },
-        content: pin.element,
-        title: `${c.id}: ${c.title}`,
-        zIndex: isSelected ? 999 : c.aiAnalysis.isDuplicate ? 1 : 100
-      });
-
-      marker.addListener("click", () => {
-        onSelectComplaint?.(c.id);
-        const detail = c.aiAnalysis.isDuplicate
-          ? `Duplicate — linked under primary report.`
-          : `${c.category} · ${c.aiAnalysis.priorityScore}/100 priority`;
-        infoWindowRef.current?.setContent(
-          `<div style="font:600 12px sans-serif;margin-bottom:2px">${c.id}: ${c.title}</div>
-           <div style="font:11px monospace;color:#475569">${detail}</div>`
-        );
-        infoWindowRef.current?.open({ map: mapRef.current!, anchor: marker });
-      });
-
-      complaintMarkersRef.current.set(c.id, marker);
-      newMarkers.push(marker);
-    });
-
-    if (showClusters) {
-      clustererRef.current = new MarkerClusterer({
-        map: mapRef.current!,
-        markers: newMarkers
-      });
-    }
-  }, [isReady, complaints, selectedComplaintId, showClusters, onSelectComplaint]);
-
-  // ---- Pan/zoom to the selected complaint -----------------------------
-  useEffect(() => {
-    if (!isReady || !mapRef.current || !selectedComplaintId) return;
-    const marker = complaintMarkersRef.current.get(selectedComplaintId);
-    if (marker && marker.position) {
-      mapRef.current.panTo(marker.position);
-    }
-  }, [isReady, selectedComplaintId]);
-
-  // ---- Live field worker markers -----------------------------
-  useEffect(() => {
-    if (!isReady || !mapRef.current || !markerLibRef.current) return;
-
-    workerMarkersRef.current.forEach((m) => (m.map = null));
-    workerMarkersRef.current = [];
-
-    if (!showWorkers) return;
-
-    const { AdvancedMarkerElement } = markerLibRef.current;
-
-    workers
-      .filter((w) => w.status !== "Offline")
-      .forEach((w) => {
-        const content = document.createElement("div");
-        content.style.width = "16px";
-        content.style.height = "16px";
-        content.style.borderRadius = "50%";
-        content.style.background = "#1565C0";
-        content.style.border = "2px solid #FFFFFF";
-        content.style.boxShadow = "0 0 0 rgba(21,101,192,0.6)";
-        content.style.animation = "civic-worker-pulse 2s infinite";
-
-        const marker = new AdvancedMarkerElement({
-          map: mapRef.current!,
-          position: { lat: w.currentLat, lng: w.currentLng },
-          content,
-          title: `${w.name} (${w.role})`
-        });
-
-        marker.addListener("click", () => {
-          infoWindowRef.current?.setContent(
-            `<div style="font:600 12px sans-serif">${w.name} (${w.role})</div>
-             <div style="font:11px monospace;color:#475569">Dept: ${w.department} · Status: ${w.status}</div>`
-          );
-          infoWindowRef.current?.open({ map: mapRef.current!, anchor: marker });
-        });
-
-        workerMarkersRef.current.push(marker);
-      });
-  }, [isReady, workers, showWorkers]);
-
-  // ---- Citizen manual drop pin -----------------------------
-  useEffect(() => {
-    if (!isReady || !mapRef.current || !markerLibRef.current) return;
-
-    if (manualPinMarkerRef.current) {
-      manualPinMarkerRef.current.map = null;
-      manualPinMarkerRef.current = null;
-    }
-
-    if (manualPin) {
-      const { AdvancedMarkerElement, PinElement } = markerLibRef.current;
-      const pin = new PinElement({
-        background: "#1565C0",
-        borderColor: "#FFFFFF",
-        glyphColor: "#FFFFFF",
-        scale: 1.1
-      });
-      manualPinMarkerRef.current = new AdvancedMarkerElement({
-        map: mapRef.current,
-        position: manualPin,
-        content: pin.element,
-        title: "Report GPS Anchor",
-        zIndex: 1000
-      });
-      mapRef.current.panTo(manualPin);
-    }
-  }, [isReady, manualPin]);
-
-  if (loadError) {
-    return (
-      <div className={`w-full ${heightClass} flex items-center justify-center bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-mono p-4 text-center`}>
-        {loadError}
-      </div>
-    );
-  }
+  ];
 
   return (
     <div className="relative w-full border border-slate-200 rounded-xl overflow-hidden bg-slate-50 flex flex-col">
-      <style>{`
-        @keyframes civic-worker-pulse {
-          0% { box-shadow: 0 0 0 0 rgba(21,101,192,0.6); }
-          70% { box-shadow: 0 0 0 10px rgba(21,101,192,0); }
-          100% { box-shadow: 0 0 0 0 rgba(21,101,192,0); }
-        }
-      `}</style>
-
       {/* Map Legend Overlay */}
       <div className="absolute top-3 left-3 z-10 bg-white/95 backdrop-blur-sm p-3 rounded-lg border border-slate-200 shadow-sm text-xs space-y-2 max-w-[200px]">
         <div className="font-semibold text-slate-800 flex items-center gap-1.5 border-b border-slate-100 pb-1">
@@ -461,12 +162,275 @@ export default function SmartCityMap({
         </div>
       </div>
 
-      {/* Real Google Map container */}
-      <div className={`relative w-full ${heightClass} ${interactiveMode ? "cursor-crosshair" : ""}`}>
-        <div ref={mapDivRef} className="w-full h-full" />
-        {!isReady && !loadError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-slate-50 text-xs text-slate-400 font-mono">
-            Loading map…
+      {/* SVG Container */}
+      <div className={`relative w-full ${heightClass} overflow-hidden cursor-crosshair`}>
+        <svg
+          viewBox="0 0 800 600"
+          className="w-full h-full select-none"
+          onClick={handleMapClick}
+        >
+          {/* Grid lines for data-driven authority look */}
+          <defs>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#E2E8F0" strokeWidth="0.5" />
+            </pattern>
+            <radialGradient id="heat-grad" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#EF4444" stopOpacity="0.4" />
+              <stop offset="50%" stopColor="#F97316" stopOpacity="0.15" />
+              <stop offset="100%" stopColor="#F97316" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <rect width="800" height="600" fill="url(#grid)" />
+
+          {/* River Godavari */}
+          {rivers.map((pathStr, idx) => (
+            <path key={`river-${idx}`} d={pathStr} fill="#E0F2FE" stroke="#BAE6FD" strokeWidth="1" />
+          ))}
+          <text x="60" y="395" fill="#0369A1" fontSize="11" fontWeight="600" className="font-mono uppercase tracking-wider">
+            River Godavari
+          </text>
+
+          {/* Parks / Landmarks */}
+          {parks.map((p, idx) => (
+            <g key={`park-${idx}`}>
+              <rect x={p.x} y={p.y} width={p.w} height={p.h} fill="#DCFCE7" rx="6" stroke="#BBF7D0" strokeWidth="1" />
+              <text x={p.x + p.w / 2} y={p.y + p.h / 2 + 4} fill="#166534" fontSize="9" fontWeight="500" textAnchor="middle" className="font-sans pointer-events-none">
+                {p.label}
+              </text>
+            </g>
+          ))}
+
+          {/* Priority Safety/Incident Zones */}
+          {showPriorityZones && priorityZones.map((z, idx) => (
+            <g key={`zone-${idx}`}>
+              <polygon points={z.points} fill={z.color} stroke={z.stroke} strokeWidth="1.5" strokeDasharray="4 3" />
+              <text
+                x={idx === 0 ? 320 : 150}
+                y={idx === 0 ? 170 : 340}
+                fill={z.stroke}
+                fontSize="9"
+                fontWeight="600"
+                className="font-mono bg-white uppercase tracking-wider"
+              >
+                ⚠️ {idx === 0 ? "SCHOOL ZONE" : "FLOOD PLAIN"}
+              </text>
+            </g>
+          ))}
+
+          {/* Main Roads */}
+          {mainRoads.map((road, idx) => {
+            let color = "#E2E8F0";
+            let width = 12;
+            if (showTraffic) {
+              if (road.traffic === "heavy") { color = "#F97316"; width = 13; }
+              else if (road.traffic === "jammed") { color = "#EF4444"; width = 14; }
+              else { color = "#10B981"; }
+            } else {
+              color = "#FFFFFF";
+            }
+            return (
+              <g key={`road-${idx}`}>
+                {/* Road Casing */}
+                <path d={road.path} fill="none" stroke="#CBD5E1" strokeWidth={width + 2} strokeLinecap="round" strokeLinejoin="round" />
+                {/* Active Road surface */}
+                <path d={road.path} fill="none" stroke={color} strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" />
+                {/* Central Lane divider dashed line */}
+                <path d={road.path} fill="none" stroke="#E2E8F0" strokeWidth="1" strokeDasharray="5 5" strokeLinecap="round" strokeLinejoin="round" />
+              </g>
+            );
+          })}
+
+          {/* Text Labels for Roads */}
+          <text x="330" y="50" fill="#64748B" fontSize="9" fontWeight="500" transform="rotate(58 330 50)" className="font-mono">Main Road</text>
+          <text x="220" y="270" fill="#64748B" fontSize="9" fontWeight="500" transform="rotate(4 220 270)" className="font-mono">Court Road</text>
+
+          {/* Heatmap Layer */}
+          {showHeatmap && complaints.map((c) => {
+            if (c.aiAnalysis.isDuplicate) return null;
+            if (c.aiAnalysis.severity !== "Critical" && c.aiAnalysis.severity !== "High") return null;
+            const { x, y } = mapCoordsToSvg(c.latitude, c.longitude);
+            return (
+              <circle
+                key={`heat-${c.id}`}
+                cx={x}
+                cy={y}
+                r={c.aiAnalysis.severity === "Critical" ? 60 : 40}
+                fill="url(#heat-grad)"
+                className="pointer-events-none"
+              />
+            );
+          })}
+
+          {/* Complaint Clusters (dotted rings around high clusters) */}
+          {showClusters && (
+            <g>
+              {/* Hardcoded visual cluster representing Main Road high-density area */}
+              <circle cx="440" cy="225" r="35" fill="none" stroke="#6366F1" strokeWidth="1" strokeDasharray="3 3 animate-pulse" />
+              <rect x="410" y="245" width="60" height="15" rx="3" fill="#6366F1" />
+              <text x="440" y="255" fill="#FFFFFF" fontSize="9" fontWeight="600" textAnchor="middle" className="font-mono">
+                CL-1 (2)
+              </text>
+            </g>
+          )}
+
+          {/* Active Incident Pins */}
+          {complaints.map((c) => {
+            const { x, y } = mapCoordsToSvg(c.latitude, c.longitude);
+            const isSelected = selectedComplaintId === c.id;
+
+            // Determine Pin Color
+            let pinColor = "#3B82F6"; // Low
+            if (c.status === "Resolved") pinColor = "#10B981"; // Resolved green
+            else if (c.aiAnalysis.severity === "Critical") pinColor = "#EF4444"; // Critical Red
+            else if (c.aiAnalysis.severity === "High") pinColor = "#F97316"; // High Orange
+            else if (c.aiAnalysis.severity === "Medium") pinColor = "#F59E0B"; // Yellow
+
+            // Don't draw duplicates separately if cluster is on, but we can draw them grayed out or stacked
+            if (c.aiAnalysis.isDuplicate) {
+              return (
+                <g
+                  key={c.id}
+                  className="cursor-pointer group"
+                  onClick={() => onSelectComplaint && onSelectComplaint(c.id)}
+                  onMouseEnter={() => setHoveredEntity({ x, y: y - 10, title: "Duplicate Report Flagged", type: "complaint", detail: `${c.id}: Linked under primary.` })}
+                  onMouseLeave={() => setHoveredEntity(null)}
+                >
+                  <circle cx={x + 5} cy={y + 5} r="5" fill="#94A3B8" stroke="#FFFFFF" strokeWidth="1" />
+                </g>
+              );
+            }
+
+            return (
+              <g
+                key={c.id}
+                className="cursor-pointer"
+                onClick={() => onSelectComplaint && onSelectComplaint(c.id)}
+                onMouseEnter={() => setHoveredEntity({
+                  x,
+                  y: y - 12,
+                  title: `${c.id}: ${c.category}`,
+                  type: "complaint",
+                  detail: `${c.title} (${c.aiAnalysis.priorityScore}/100 Priority)`
+                })}
+                onMouseLeave={() => setHoveredEntity(null)}
+              >
+                {/* Selection Pulse Ring */}
+                {isSelected && (
+                  <circle cx={x} cy={y} r="16" fill="none" stroke={pinColor} strokeWidth="2">
+                    <animate attributeName="r" values="8;18;8" dur="2s" repeatCount="indefinite" />
+                    <animate attributeName="opacity" values="1;0.2;1" dur="2s" repeatCount="indefinite" />
+                  </circle>
+                )}
+
+                {/* Pin shadow */}
+                <ellipse cx={x} cy={y + 3} rx="4" ry="1.5" fill="rgba(0,0,0,0.2)" />
+
+                {/* Actual Pin Pinhead */}
+                <path
+                  d="M 8,0 C 8,4.5 3.5,9 0,14 C -3.5,9 -8,4.5 -8,0 C -8,-4.5 -3.5,-8 0,-8 C 3.5,-8 8,-4.5 8,0 Z"
+                  transform={`translate(${x}, ${y})`}
+                  fill={pinColor}
+                  stroke="#FFFFFF"
+                  strokeWidth="1.5"
+                  className="transition-transform duration-200 hover:scale-125"
+                />
+
+                {/* Priority display inside or next to pin */}
+                <circle cx={x} cy={y} r="3" fill="#FFFFFF" />
+              </g>
+            );
+          })}
+
+          {/* Live Field Workers tracking */}
+          {showWorkers && workers.map((w) => {
+            if (w.status === "Offline") return null;
+            const { x, y } = mapCoordsToSvg(w.currentLat, w.currentLng);
+            return (
+              <g
+                key={w.id}
+                onMouseEnter={() => setHoveredEntity({
+                  x,
+                  y: y - 14,
+                  title: `${w.name} (${w.role})`,
+                  type: "worker",
+                  detail: `Dept: ${w.department} | Status: ${w.status}`
+                })}
+                onMouseLeave={() => setHoveredEntity(null)}
+              >
+                {/* Radar pulse ring for live tracking */}
+                <circle cx={x} cy={y} r="12" fill="none" stroke="#1565C0" strokeWidth="1" opacity="0.6">
+                  <animate attributeName="r" values="4;15" dur="3s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.8;0" dur="3s" repeatCount="indefinite" />
+                </circle>
+
+                {/* Worker marker */}
+                <circle cx={x} cy={y} r="6.5" fill="#1565C0" stroke="#FFFFFF" strokeWidth="1.5" />
+                <path d="M -3,-3 L 3,3 M 3,-3 L -3,3" stroke="#FFFFFF" strokeWidth="1" transform={`translate(${x}, ${y})`} />
+              </g>
+            );
+          })}
+
+          {/* Citizen Manual Location Drop Pin (Citizen Complaint Submit Screen) */}
+          {manualPin && (
+            <g
+              onMouseEnter={() => setHoveredEntity({
+                x: mapCoordsToSvg(manualPin.lat, manualPin.lng).x,
+                y: mapCoordsToSvg(manualPin.lat, manualPin.lng).y - 12,
+                title: "Report GPS Anchor",
+                type: "pin",
+                detail: `Lat: ${manualPin.lat}, Lng: ${manualPin.lng}`
+              })}
+              onMouseLeave={() => setHoveredEntity(null)}
+            >
+              {/* Dropped pin indicator */}
+              <circle
+                cx={mapCoordsToSvg(manualPin.lat, manualPin.lng).x}
+                cy={mapCoordsToSvg(manualPin.lat, manualPin.lng).y}
+                r="18"
+                fill="none"
+                stroke="#1565C0"
+                strokeWidth="2"
+                strokeDasharray="3 2 animate-spin"
+              />
+              <path
+                d="M 10,0 C 10,5.5 4.5,11 0,18 C -4.5,11 -10,5.5 -10,0 C -10,-5.5 -4.5,-10 0,-10 C 4.5,-10 10,-5.5 10,0 Z"
+                transform={`translate(${mapCoordsToSvg(manualPin.lat, manualPin.lng).x}, ${mapCoordsToSvg(manualPin.lat, manualPin.lng).y})`}
+                fill="#1565C0"
+                stroke="#FFFFFF"
+                strokeWidth="2"
+              />
+              <circle
+                cx={mapCoordsToSvg(manualPin.lat, manualPin.lng).x}
+                cy={mapCoordsToSvg(manualPin.lat, manualPin.lng).y}
+                r="4"
+                fill="#FFFFFF"
+              />
+            </g>
+          )}
+        </svg>
+
+        {/* Hover / Tooltip HUD element */}
+        {hoveredEntity && (
+          <div
+            className="absolute z-20 bg-slate-900 text-white p-2.5 rounded shadow-lg text-xs pointer-events-none transition-all font-mono"
+            style={{
+              left: `${(hoveredEntity.x / 800) * 100}%`,
+              top: `${(hoveredEntity.y / 600) * 100}%`,
+              transform: "translate(-50%, -100%)",
+              marginTop: "-8px"
+            }}
+          >
+            <div className="font-bold flex items-center gap-1.5 text-blue-300">
+              {hoveredEntity.type === "complaint" && <MapPin className="h-3 w-3" />}
+              {hoveredEntity.type === "worker" && <Users className="h-3 w-3" />}
+              {hoveredEntity.type === "pin" && <Navigation className="h-3 w-3" />}
+              <span>{hoveredEntity.title}</span>
+            </div>
+            {hoveredEntity.detail && (
+              <div className="text-[10px] text-slate-300 mt-1 whitespace-pre-wrap leading-relaxed max-w-[220px]">
+                {hoveredEntity.detail}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -475,10 +439,10 @@ export default function SmartCityMap({
       <div className="p-3 bg-white border-t border-slate-200 flex flex-wrap items-center justify-between gap-2.5 text-xs text-slate-600 font-medium">
         <div className="flex items-center gap-2">
           <Navigation className="h-4 w-4 text-slate-400" />
-          <span className="text-slate-800 font-mono">Rajahmundry Municipal Corp. · Live Google Maps</span>
+          <span className="text-slate-800 font-mono">Boundaries: Rajahmundry Municipal Corp. (16.98°N to 17.02°N)</span>
         </div>
         <div className="text-[10px] text-slate-400 font-mono uppercase bg-slate-100 px-2 py-0.5 rounded">
-          Map ID: civic-ai
+          Vectors: 100% Vector Canvas Layer
         </div>
       </div>
     </div>
